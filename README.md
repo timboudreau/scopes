@@ -1,7 +1,7 @@
 Scopes
 ======
 
-Easy-to-use custom Guice scopes - reentrant and not.
+Easy-to-use custom Guice scopes - reentrant and not.  Bits vailable in <a href="http://timboudreau.com/builds/">this Maven repository/continuous-build</a>.
 
 Usage
 -----
