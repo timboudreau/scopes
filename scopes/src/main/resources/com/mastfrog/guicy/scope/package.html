@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title></title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    </head>
+    <body>
+        <h1>Scopes</h1>
+        <p>
+            This package is a toolkit for building custom scopes.  On the one hand,
+            Guice's own docs advise against doing that;  this package aims to make
+            it safe for mere mortals to do.
+        </p>
+        <p>
+            Reasons you might want to do that:
+        </p>
+        <ul>
+            <li>
+                AssistedInject is verbose and ugly.  More importantly, it requires
+                a lot of boilerplate.  That's tolerable if you want to inject one
+                or two "live" things.  But if you have a lot of them, it
+                starts to affect readability and maintainability.
+            </li>
+            <li>
+                If your application has any sort of natural request/response
+                cycle, and you want the code in your application to be clean
+                and readable, you probably want to parse your request-thing into
+                the objects that will actually be used by the things that handle
+                requests.
+            </li>
+            <li>
+                Guice suffers from a belief that a lot of frameworks suffer from:
+                that its authors are the only people in the world writing a
+                framework, and everybody else is writing fairly trivial applications.
+                Yet if you want to do good software, you probably should be
+                dividing your own work into decoupled frameworks too.
+                <p/>
+                Which means, despite the protestations of Guice's docs, you're
+                <i>going</i> to write code that handles the <code>Injector</code>,
+                or <i>you</i> get to take advantage of Guice but the users of your
+                framework can't - at least not in any non-trivial way.
+            </li>
+        </ul>
+        <p>
+            Custom scopes provide a reasonable way to provide a pile of objects
+            which should be injectable into objects down the call-chain, and a
+            few utilities for doing multithreading in an environment with scopes.
+        </p>
+        <h2>Using Custom Scopes</h2>
+        <p>
+            This is a fairly small library, as it should be.  The heart of it is
+            <code><a href="AbstractScope.html">AbstractScope</a></code>.  Typically
+            you will create an instance of <code><a href="ReentrantScope.html">ReentrantScope</a></code>
+            or <code><a href="SingleEntryScope.html">SingleEntryScope</a></code>.
+            You <i>enter</i> the scope with some objects which are made available
+            for injection.  The <code>enter()</code> method returns an 
+            <code>AutoCloseable</code> which ensure the scope is exited properly.
+        </p>
+        <pre>
+            // bind the types you will use inside your scope in your Guice
+            // module!
+
+            AbstractScope scope = new ReentrantScope();
+
+            try (AutoCloseable ac = scope.enter("hello")) {
+                // here the injector can inject "hello" for String.class
+            }
+        </pre>
+        <p>
+            Probably you noticed that inside the <code>try</code> block above,
+            you will still have to write code that directly handles the injector.
+            On the one hand, that's frowned upon.  On the other hand, <i>something</i>
+            is touching the injector if you're using AssistedInject, so the idea
+            that there is something evil about doing that was always a fiction.
+        </p>
+        <p>
+            On the other hand, we do provide a way to encapsulate doing that and
+            do it in a consistent way.  For that case, you simply subclass
+            <code>Runnable</code> or <code>Callable</code> and pass the <code>Class</code>
+            object for it to a <code>ScopeRunner</code> for your scope.
+        </p>
+        <p>
+            If, as is commonly the case, your application has only one "request"
+            or request-like scope, the simplest thing is to bind <code>AbstractScope</code>
+            to the scope instance you want to use (this also makes it easier to
+            write tests for scope contents by replacing the scope in tests).
+        </p>
+        <p>
+            Here is a simple example of how this works in practice
+        </p>
+        <pre>
+    &#064;Test
+    public void testScopeRunner() throws Exception {
+        ScopesModule module = new ScopesModule();
+        Injector inj = Guice.createInjector(module);
+        
+        // We will inject this StringBuilder into an instance of C below
+        StringBuilder constant = new StringBuilder("hello");
+
+        // ScopeRunner wraps the Injector and lets us instantiate C and get it
+        // injected with objects only available in the scope
+        ScopeRunner r = inj.getInstance(ScopeRunner.class);
+        AbstractScope scope = r.scope();
+
+        try (AutoCloseable cl = scope.enter(constant)) {
+            assertTrue(scope.inScope());
+            StringBuilder sb = r.call(C.class);
+            assertNotNull(sb);
+            assertSame(constant, sb);
+            assertEquals("hello", sb.toString());
+        }
+    }
+    
+    static class C implements Callable&lt;StringBuilder&gt; {
+        private final StringBuilder sb;
+        &#064;Inject
+        C(StringBuilder sb) {
+            this.sb = sb;
+        }
+
+        &#064;Override
+        public StringBuilder call() throws Exception {
+            return sb;
+        }
+    }
+
+    private static final class ScopesModule extends AbstractModule {
+        &#064;Override
+        protected void configure() {
+            ReentrantScope scope = new ReentrantScope();
+            bind(AbstractScope.class).toInstance(scope);
+            scope.bind(binder(), String.class, StringBuilder.class, Integer.class);
+        }
+    }
+        </pre>
+
+        <h2>Thread Pools</h2>
+        <p>
+            Guice's scopes are typically just magical wrappers for ThreadLocals, and
+            in fact that's what the Scope subclasses here are, for the most part.
+        </p>
+        <p>
+            One thing which is useful and not generally simple, once you're dealing
+            with scopes, is the notion that you might need to re-dispatch work
+            on another thread.  For example, one use of this project is in
+            a framework which uses Netty to do single-threaded, highly scalable
+            web servers.  If you need to actually do blocking work, you have to
+            have a way to shuffle that work off into a thread-pool.  If you're
+            using injection, of course it would be nice to be able to bring the
+            scope contents with you.
+        </p>
+        <p>
+            So the one other thing this library does is make it easy to do that -
+            just use <code>AbstractScope.wrapThreadPool(ExecutorService)</code>
+            to wrap a JDK thread-pool with one which lets you:
+        </p>
+        <ul>
+            <li>
+                Submit a runnable within a scope, and have the current contents of
+                the scope preserved
+            </li>
+            <li>
+                Have the same contents the scope had when your Runnable/Callable
+                was created set back up
+            </li>
+        </ul>
+        <p>
+            On the one hand, this means that any objects that were in-scope when
+            something was submitted to the thread pool will exist until the runnable
+            or callable you submitted has exited.  On the other hand, most 
+            other ways to do this sort of callback programming do the same thing
+            based on the visibility of variables.
+        </p>
+    </body>
+</html>
