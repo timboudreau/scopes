@@ -6,5 +6,5 @@
 *.ear
 *.orig
 *.iml
-.idea/*
-target/*
+.idea/
+target/
