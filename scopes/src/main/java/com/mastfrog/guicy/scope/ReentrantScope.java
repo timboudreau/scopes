@@ -26,6 +26,8 @@ package com.mastfrog.guicy.scope;
 import java.util.*;
 import java.util.logging.Level;
 import org.openide.util.Lookup;
+import org.openide.util.lookup.AbstractLookup;
+import org.openide.util.lookup.InstanceContent;
 import org.openide.util.lookup.ProxyLookup;
 
 /**
@@ -64,16 +66,18 @@ public class ReentrantScope extends AbstractScope {
             stack.set(lkps);
         }
         if (logger.isLoggable(Level.FINEST)) {
-            logger.log(Level.FINEST, "Enter {0} entry count {1} with {2}", 
-                    new Object[]{getClass().getSimpleName(), 
+            logger.log(Level.FINEST, "Enter {0} entry count {1} with {2}",
+                    new Object[]{getClass().getSimpleName(),
                         stack.get().size(), Arrays.asList(scopeContents)});
         }
         lkps.add(createLookup(scopeContents));
         return ac;
     }
-    
+
     private final AC ac = new AC();
+
     private final class AC implements AutoCloseable {
+
         @Override
         public void close() throws Exception {
             exit();
@@ -87,7 +91,7 @@ public class ReentrantScope extends AbstractScope {
         Lookup formerContext = lkps.pop();
         assert formerContext != null;
         if (logger.isLoggable(Level.FINEST)) {
-            logger.log(Level.FINEST, "Exit {0} entry count {1}", 
+            logger.log(Level.FINEST, "Exit {0} entry count {1}",
                     new Object[]{getClass().getSimpleName(), stack.get().size()});
         }
         if (lkps.isEmpty()) {
@@ -99,7 +103,7 @@ public class ReentrantScope extends AbstractScope {
     public final boolean inScope() {
         return stack.get() != null;
     }
-    
+
     @Override
     protected final Lookup getLookup() {
         LinkedList<Lookup> lkps = stack.get();
