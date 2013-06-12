@@ -29,6 +29,7 @@ import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.Scope;
 import com.mastfrog.util.Invokable;
+import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -174,7 +175,7 @@ public abstract class AbstractScope implements Scope {
      * @return An instance of AutoClosable which can be used with JDK-7's
      * try-with-resources to ensure the scope is exited.
      */
-    protected abstract AutoCloseable enter(Object... scopeContents);
+    protected abstract QuietAutoCloseable enter(Object... scopeContents);
 
     /**
      * Exit the scope. Must be called symmetrically with enter.

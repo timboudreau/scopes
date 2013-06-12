@@ -24,6 +24,9 @@
 package com.mastfrog.guicy.scope;
 
 import com.google.inject.Scope;
+import com.mastfrog.util.thread.QuietAutoCloseable;
+import com.mastfrog.util.thread.TypedAutoCloseable;
+import static java.lang.Math.E;
 import java.util.concurrent.Callable;
 import org.openide.util.Lookup;
 
@@ -53,14 +56,14 @@ public class SingleEntryScope extends AbstractScope implements Scope {
         }
     }
 
-    protected AutoCloseable enter(Object... scopeContents) {
+    protected QuietAutoCloseable enter(Object... scopeContents) {
         if (values.get() != null) {
             throw new IllegalStateException("Already in scope " + this);
         }
         values.set(createLookup(scopeContents));
-        return new AutoCloseable() {
+        return new QuietAutoCloseable() {
             @Override
-            public void close() throws Exception {
+            public void close() {
                 exit();
             }
         };

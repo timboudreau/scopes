@@ -23,6 +23,8 @@
  */
 package com.mastfrog.guicy.scope;
 
+import com.mastfrog.util.thread.QuietAutoCloseable;
+import com.mastfrog.util.thread.TypedAutoCloseable;
 import java.util.*;
 import java.util.logging.Level;
 import org.openide.util.Lookup;
@@ -58,7 +60,7 @@ public class ReentrantScope extends AbstractScope {
     }
 
     @Override
-    public AutoCloseable enter(Object... scopeContents) {
+    public QuietAutoCloseable enter(Object... scopeContents) {
         scopeContents = includeStackTrace(convertObjects(scopeContents));
         LinkedList<Lookup> lkps = stack.get();
         if (lkps == null) {
@@ -76,10 +78,10 @@ public class ReentrantScope extends AbstractScope {
 
     private final AC ac = new AC();
 
-    private final class AC implements AutoCloseable {
+    private final class AC extends QuietAutoCloseable {
 
         @Override
-        public void close() throws Exception {
+        public void close() {
             exit();
         }
     }

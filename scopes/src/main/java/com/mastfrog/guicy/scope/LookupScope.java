@@ -23,6 +23,8 @@
  */
 package com.mastfrog.guicy.scope;
 
+import com.mastfrog.util.thread.QuietAutoCloseable;
+import com.mastfrog.util.thread.TypedAutoCloseable;
 import org.openide.util.Lookup;
 
 /**
@@ -47,12 +49,12 @@ public class LookupScope extends AbstractScope {
     }
 
     @Override
-    protected AutoCloseable enter(Object... scopeContents) {
+    protected QuietAutoCloseable  enter(Object... scopeContents) {
         //do nothing
-        return new AutoCloseable() {
+        return new QuietAutoCloseable() {
 
             @Override
-            public void close() throws Exception {
+            public void close() {
                 exit();
             }
             
