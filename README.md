@@ -1,7 +1,7 @@
 Scopes
 ======
 
-Easy-to-use custom Guice scopes - reentrant and not.  Bits vailable in <a href="http://timboudreau.com/builds/">this Maven repository/continuous-build</a>.
+Easy-to-use custom Guice scopes - reentrant and not.  Bits available in <a href="http://timboudreau.com/builds/">this Maven repository/continuous-build</a>.
 
 Usage
 -----
@@ -25,7 +25,7 @@ This library offers a simple alternative:
             // there is no getting around explitly binding classes, but
             // you can provide a way to pass in an array easily enough:
 
-            scope.bindTypes(FooRequest.class, FooResponse.class, ...);
+            scope.bindTypes(binder(), FooRequest.class, FooResponse.class, ...);
         }
     }
 
