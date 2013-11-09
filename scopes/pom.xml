@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>com.mastfrog</groupId>
-        <artifactId>scopes-parent</artifactId>
+        <artifactId>mastfrog-parent</artifactId>
         <version>1.3.7-SNAPSHOT</version>
     </parent>
     <artifactId>scopes</artifactId>
