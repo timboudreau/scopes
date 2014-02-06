@@ -47,7 +47,7 @@ import java.util.concurrent.ExecutorService;
  * A Treadmill makes available a Deferrer object which can be used to defer
  * execution part way through, and then restart it in the future, optionally
  * injecting some additional objects into the context.
- * 
+ *
  * @author Tim Boudreau
  */
 public final class Treadmill {
@@ -142,18 +142,21 @@ public final class Treadmill {
      * optionally injecting additional contents.
      */
     public static abstract class Deferral {
-        
+
         /**
-         * Defer further execution of this Treadmill until such time as
-         * resume() is called on the returned resumer.
-         * @return 
+         * Defer further execution of this Treadmill until such time as resume()
+         * is called on the returned resumer.
+         *
+         * @return
          */
         public abstract Resumer defer();
 
         public interface Resumer {
+
             /**
-             * Resume execution with the next Callable.  Note that the next
+             * Resume execution with the next Callable. Note that the next
              * callable is not invoked synchronously
+             *
              * @param addToContext Any additional objects which should be
              * injected and made available
              */
@@ -167,6 +170,7 @@ public final class Treadmill {
         private final ExecutorService svc;
         private C call;
         private Callable<Object[]> wrapped;
+        private volatile boolean invalid;
 
         public DeferralImpl(ExecutorService svc) {
             this.svc = svc;
@@ -174,6 +178,10 @@ public final class Treadmill {
 
         @Override
         public Resumer defer() {
+            if (invalid) {
+                throw new IllegalStateException("Cannot defer something which"
+                        + " has already happened");
+            }
             deferred = true;
             return new Resumer() {
 
@@ -193,6 +201,10 @@ public final class Treadmill {
             this.wrapped = wrapped;
             this.call = actual;
         }
+
+        void done() {
+            invalid = true;
+        }
     }
 
     private class C implements Callable<Object[]> {
@@ -205,7 +217,7 @@ public final class Treadmill {
         public C(CountDownLatch latch, Runnable onDone, Object... last) {
             this.latch = latch;
             this.onDone = onDone;
-            this.last = last;
+            this.last = merge(last, new Object[]{defer});
         }
 
         void include(Object[] objs) {
@@ -214,10 +226,7 @@ public final class Treadmill {
 
         private void run() throws Exception {
             Callable<Object[]> curr = i.next();
-            Object[] nue;
-            try (QuietAutoCloseable x = scope.enter(defer)) {
-                nue = curr.call();
-            }
+            Object[] nue = curr.call();
             if (nue != null && i.hasNext()) {
                 C nextActual = new C(latch, onDone, nue);
                 Callable<Object[]> next = scope.wrap(nextActual);
