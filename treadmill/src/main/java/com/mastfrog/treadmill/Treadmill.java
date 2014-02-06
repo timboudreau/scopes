@@ -24,6 +24,7 @@
 package com.mastfrog.treadmill;
 
 import com.mastfrog.guicy.scope.ReentrantScope;
+import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -42,14 +43,18 @@ import java.util.concurrent.ExecutorService;
  * that can be injected into objects. So there is some resemblance to
  * tail-recursion - it gets the effect of recursively calling a series of
  * callbacks with each other's output without the messiness.
- *
+ * <p/>
+ * A Treadmill makes available a Deferrer object which can be used to defer
+ * execution part way through, and then restart it in the future, optionally
+ * injecting some additional objects into the context.
+ * 
  * @author Tim Boudreau
  */
 public final class Treadmill {
 
     private final ExecutorService svc;
     private final ReentrantScope scope;
-    private final Iterator<Callable<Object[]>> i;
+    private final Iterator<? extends Callable<Object[]>> i;
     private final Thread.UncaughtExceptionHandler h;
 
     /**
@@ -60,7 +65,7 @@ public final class Treadmill {
      * added to before calling the next one
      * @param i An iterator of callables
      */
-    public Treadmill(ExecutorService svc, ReentrantScope scope, Iterator<Callable<Object[]>> i) {
+    public Treadmill(ExecutorService svc, ReentrantScope scope, Iterator<? extends Callable<Object[]>> i) {
         this(svc, scope, i, null);
     }
 
@@ -75,7 +80,7 @@ public final class Treadmill {
      * the current thread's uncaught exception handler will have to deal with
      * them
      */
-    public Treadmill(ExecutorService svc, ReentrantScope scope, Iterator<Callable<Object[]>> i, Thread.UncaughtExceptionHandler h) {
+    public Treadmill(ExecutorService svc, ReentrantScope scope, Iterator<? extends Callable<Object[]>> i, Thread.UncaughtExceptionHandler h) {
         this.svc = svc;
         this.scope = scope;
         this.i = i;
@@ -116,11 +121,86 @@ public final class Treadmill {
         return latch;
     }
 
+    private static Object[] merge(Object[] a, Object[] b) {
+        if (a.length == 0) {
+            return b;
+        } else if (b.length == 0) {
+            return a;
+        } else {
+            Object[] nue = new Object[a.length + b.length];
+            System.arraycopy(a, 0, nue, 0, a.length);
+            System.arraycopy(b, 0, nue, a.length, b.length);
+            return nue;
+        }
+    }
+
+    /**
+     * An object which is injected into the scope callables run in, which can be
+     * used to halt execution of subsequent Callables, which provides a Resumer
+     * - a handle whosse resume() method can be called to resume execution of
+     * the remaining Callables in the iterable at some time in the future,
+     * optionally injecting additional contents.
+     */
+    public static abstract class Deferral {
+        
+        /**
+         * Defer further execution of this Treadmill until such time as
+         * resume() is called on the returned resumer.
+         * @return 
+         */
+        public abstract Resumer defer();
+
+        public interface Resumer {
+            /**
+             * Resume execution with the next Callable.  Note that the next
+             * callable is not invoked synchronously
+             * @param addToContext Any additional objects which should be
+             * injected and made available
+             */
+            public void resume(Object... addToContext);
+        }
+    }
+
+    static class DeferralImpl extends Deferral {
+
+        private volatile boolean deferred;
+        private final ExecutorService svc;
+        private C call;
+        private Callable<Object[]> wrapped;
+
+        public DeferralImpl(ExecutorService svc) {
+            this.svc = svc;
+        }
+
+        @Override
+        public Resumer defer() {
+            deferred = true;
+            return new Resumer() {
+
+                @Override
+                public void resume(Object... addToContext) {
+                    if (deferred == false) {
+                        throw new IllegalStateException("Already resumed");
+                    }
+                    deferred = false;
+                    call.include(addToContext);
+                    svc.submit(wrapped);
+                }
+            };
+        }
+
+        void prepare(Callable<Object[]> wrapped, C actual) {
+            this.wrapped = wrapped;
+            this.call = actual;
+        }
+    }
+
     private class C implements Callable<Object[]> {
 
         private final CountDownLatch latch;
         private final Runnable onDone;
-        private final Object[] last;
+        private Object[] last;
+        private final DeferralImpl defer = new DeferralImpl(svc);
 
         public C(CountDownLatch latch, Runnable onDone, Object... last) {
             this.latch = latch;
@@ -128,12 +208,24 @@ public final class Treadmill {
             this.last = last;
         }
 
+        void include(Object[] objs) {
+            last = merge(last, objs);
+        }
+
         private void run() throws Exception {
             Callable<Object[]> curr = i.next();
-            Object[] nue = curr.call();
+            Object[] nue;
+            try (QuietAutoCloseable x = scope.enter(defer)) {
+                nue = curr.call();
+            }
             if (nue != null && i.hasNext()) {
-                Callable<Object[]> next = scope.wrap(new C(latch, onDone, nue));
-                svc.submit(next);
+                C nextActual = new C(latch, onDone, nue);
+                Callable<Object[]> next = scope.wrap(nextActual);
+                if (defer.deferred) {
+                    defer.prepare(next, nextActual);
+                } else {
+                    svc.submit(next);
+                }
             } else if (nue == null || !i.hasNext()) {
                 try {
                     if (onDone != null) {
