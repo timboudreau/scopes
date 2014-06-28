@@ -194,6 +194,10 @@ public final class Treadmill {
                     call.include(addToContext);
                     svc.submit(wrapped);
                 }
+                
+                public String toString() {
+                    return "Resumer of " + call;
+                }
             };
         }
 
@@ -204,6 +208,10 @@ public final class Treadmill {
 
         void done() {
             invalid = true;
+        }
+        
+        public String toString() {
+            return super.toString() + " over " + call + " + " + wrapped;
         }
     }
 
@@ -230,9 +238,10 @@ public final class Treadmill {
             if (nue != null && i.hasNext()) {
                 C nextActual = new C(latch, onDone, nue);
                 Callable<Object[]> next = scope.wrap(nextActual);
-                if (defer.deferred) {
+//                if (defer.deferred) {
                     defer.prepare(next, nextActual);
-                } else {
+//                } else {
+                if (!defer.deferred) {
                     svc.submit(next);
                 }
             } else if (nue == null || !i.hasNext()) {
