@@ -240,6 +240,16 @@ public abstract class AbstractScope implements Scope {
     public boolean contains(Class<?> type) {
         return getLookup().lookup(type) != null;
     }
+    
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder(getClass().getSimpleName()).append("{");
+        for (Iterator<? extends Object> it= getLookup().lookupAll(Object.class).iterator(); it.hasNext();) {
+            Object o = it.next();
+            sb.append('\t').append(o.getClass().getName()).append(": ").append(o).append('\n');
+        }
+        return sb.append("}").toString();
+    }
 
     /**
      * Enter this scope with an Invokable (similar to Callable, but takes a

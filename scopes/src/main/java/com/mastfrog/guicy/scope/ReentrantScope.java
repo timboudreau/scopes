@@ -24,12 +24,9 @@
 package com.mastfrog.guicy.scope;
 
 import com.mastfrog.util.thread.QuietAutoCloseable;
-import com.mastfrog.util.thread.TypedAutoCloseable;
 import java.util.*;
 import java.util.logging.Level;
 import org.openide.util.Lookup;
-import org.openide.util.lookup.AbstractLookup;
-import org.openide.util.lookup.InstanceContent;
 import org.openide.util.lookup.ProxyLookup;
 
 /**
