@@ -24,6 +24,9 @@
 package com.mastfrog.treadmill;
 
 import com.mastfrog.guicy.scope.ReentrantScope;
+import com.mastfrog.treadmill.Treadmill.Deferral;
+import com.mastfrog.treadmill.Treadmill.Deferral.Resumer;
+import com.mastfrog.util.Exceptions;
 import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
@@ -33,28 +36,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Implements the pattern of serially executing a series of chunks of logic in a
- * thread-pool, inside of a Guice injection scope. Each Callable can provide
- * some objects which will be included in the scope's injection context for the
- * next one. Throwing Abort or returning null from the callable indicates that
- * no further items should be processed.
- * <p/>
- * The effect is rather like recursively calling callables with the output of
- * other callables, except that rather than retain the entire thread stack and
- * any final variables in scope, only the scope contents is preserved as state
- * that can be injected into objects. So there is some resemblance to
- * tail-recursion - it gets the effect of recursively calling a series of
- * callbacks with each other's output without the messiness.
- * <p/>
- * A Treadmill makes available a Deferrer object which can be used to defer
- * execution part way through, and then restart it in the future, optionally
- * injecting some additional objects into the context.
+ * Synchronous version of Treadmill
  *
  * @author Tim Boudreau
  */
-public class Treadmill {
+public class SynchronousTreadmill {
 
-    private ExecutorService svc;
     private ReentrantScope scope;
     private Iterator<? extends Callable<Object[]>> i;
     private Thread.UncaughtExceptionHandler h;
@@ -67,8 +54,8 @@ public class Treadmill {
      * added to before calling the next one
      * @param i An iterator of callables
      */
-    public Treadmill(ExecutorService svc, ReentrantScope scope, Iterator<? extends Callable<Object[]>> i) {
-        this(svc, scope, i, null);
+    public SynchronousTreadmill(ReentrantScope scope, Iterator<? extends Callable<Object[]>> i) {
+        this(scope, i, null);
     }
 
     /**
@@ -82,8 +69,7 @@ public class Treadmill {
      * the current thread's uncaught exception handler will have to deal with
      * them
      */
-    public Treadmill(ExecutorService svc, ReentrantScope scope, Iterator<? extends Callable<Object[]>> i, Thread.UncaughtExceptionHandler h) {
-        this.svc = svc;
+    public SynchronousTreadmill(ReentrantScope scope, Iterator<? extends Callable<Object[]>> i, Thread.UncaughtExceptionHandler h) {
         this.scope = scope;
         this.i = i;
         this.h = h;
@@ -102,10 +88,10 @@ public class Treadmill {
      */
     public CountDownLatch start(Runnable onDone, Object... initialContents) {
         CountDownLatch latch = new CountDownLatch(1);
-        if (scope.inScope()) {
-            svc.submit(scope.wrap(new Runner(onDone, latch, initialContents)));
-        } else {
-            svc.submit(new Runner(onDone, latch, initialContents));
+        try {
+            new Runner(onDone, latch, initialContents).call();
+        } catch (Exception ex) {
+            Exceptions.chuck(ex);
         }
         return latch;
     }
@@ -163,21 +149,16 @@ public class Treadmill {
                 if (h != null) {
                     h.uncaughtException(Thread.currentThread(), e);
                     latch.countDown();
-                    return null;
                 } else {
                     throw e;
                 }
             }
-            boolean more = i.hasNext() && result != null;
+            boolean more = result != null && i.hasNext();
             if (more && result != null && result.length > 0) {
                 newContents(current, result);
             }
             if (!defer.deferred.get() && more) {
-                if (scope.inScope()) {
-                    svc.submit(scope.wrap(this));
-                } else {
-                    svc.submit(this);
-                }
+                call();
             } else if (!more) {
                 if (onDone != null) {
                     onDone.run();
@@ -197,7 +178,7 @@ public class Treadmill {
             contents.set(nue);
         }
 
-        private class Defer extends Deferral implements Deferral.Resumer {
+        private class Defer extends Deferral implements Resumer {
 
             private final AtomicBoolean deferred = new AtomicBoolean();
 
@@ -220,41 +201,15 @@ public class Treadmill {
                         newContents(contents.get(), addToContext);
                     }
                     defer.deferred.set(false);
-                    svc.submit(Runner.this);
+                    try {
+                        Runner.this.call();
+                    } catch (Exception ex) {
+                        Exceptions.chuck(ex);
+                    }
                 } else {
                     throw new IllegalStateException("Not paused");
                 }
             }
-        }
-    }
-
-    /**
-     * An object which is injected into the scope callables run in, which can be
-     * used to halt execution of subsequent Callables, which provides a Resumer
-     * - a handle whosse resume() method can be called to resume execution of
-     * the remaining Callables in the iterable at some time in the future,
-     * optionally injecting additional contents.
-     */
-    public static abstract class Deferral {
-
-        /**
-         * Defer further execution of this Treadmill until such time as resume()
-         * is called on the returned resumer.
-         *
-         * @return
-         */
-        public abstract Resumer defer();
-
-        public interface Resumer {
-
-            /**
-             * Resume execution with the next Callable. Note that the next
-             * callable is not invoked synchronously
-             *
-             * @param addToContext Any additional objects which should be
-             * injected and made available
-             */
-            public void resume(Object... addToContext);
         }
     }
 }

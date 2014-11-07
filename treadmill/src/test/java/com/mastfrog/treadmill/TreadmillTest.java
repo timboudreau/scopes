@@ -39,6 +39,7 @@ public class TreadmillTest {
         UncaughtExceptionHandler h = new UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread thread, Throwable thrwbl) {
+                thrwbl.printStackTrace();
                 fails.add(thrwbl);
             }
         };
