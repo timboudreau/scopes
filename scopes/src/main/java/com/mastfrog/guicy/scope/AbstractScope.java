@@ -1,4 +1,4 @@
-/* 
+/*
  * The MIT License
  *
  * Copyright 2013 Tim Boudreau.
@@ -240,7 +240,7 @@ public abstract class AbstractScope implements Scope {
     public boolean contains(Class<?> type) {
         return getLookup().lookup(type) != null;
     }
-    
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder(getClass().getSimpleName()).append("{");
@@ -392,6 +392,10 @@ public abstract class AbstractScope implements Scope {
         return new WrapCallable<>(this, callable);
     }
 
+    public <T> Callable<T> wrap(Callable<T> callable, Object... contents) {
+        return new WrapCallable<T>(this, callable, contents);
+    }
+
     static class WrapRunnable implements Runnable {
 
         private final Runnable run;
@@ -439,6 +443,12 @@ public abstract class AbstractScope implements Scope {
             this.scope = scope;
             this.callable = callable;
             scopeContents = scope.getLookup().lookupAll(Object.class).toArray();
+        }
+
+        WrapCallable(AbstractScope scope, Callable<T> callable, Object... contents) {
+            this.scope = scope;
+            this.callable = callable;
+            this.scopeContents = contents;
         }
 
         Callable<T> unwrap() {
