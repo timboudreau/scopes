@@ -1,4 +1,4 @@
-/*
+/* 
  * The MIT License
  *
  * Copyright 2014 Tim Boudreau.
@@ -24,13 +24,10 @@
 package com.mastfrog.treadmill;
 
 import com.mastfrog.guicy.scope.ReentrantScope;
-import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Implements the pattern of serially executing a series of chunks of logic in a
@@ -52,12 +49,12 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @author Tim Boudreau
  */
-public class Treadmill {
+public final class Treadmill {
 
-    private ExecutorService svc;
-    private ReentrantScope scope;
-    private Iterator<? extends Callable<Object[]>> i;
-    private Thread.UncaughtExceptionHandler h;
+    private final ExecutorService svc;
+    private final ReentrantScope scope;
+    private final Iterator<? extends Callable<Object[]>> i;
+    private final Thread.UncaughtExceptionHandler h;
 
     /**
      * Create a new treadmill.
@@ -90,6 +87,17 @@ public class Treadmill {
     }
 
     /**
+     * Submit the initial callable to the thread pool, starting the chain
+     *
+     * @param initialContents Any initial contents for the scope
+     * @return A latch which can be awaited - use this only in tests if you want
+     * actual concurrency!
+     */
+    public CountDownLatch start(Object... initialContents) {
+        return start(null, initialContents);
+    }
+
+    /**
      * Submit the initial callable to the thread pool, starting the chain.
      *
      * @param onDone A runnable which should be run after the last Callable that
@@ -101,130 +109,27 @@ public class Treadmill {
      * actual concurrency!
      */
     public CountDownLatch start(Runnable onDone, Object... initialContents) {
+        Callable<Object[]> c;
         CountDownLatch latch = new CountDownLatch(1);
         if (scope.inScope()) {
-            svc.submit(scope.wrap(new Runner(onDone, latch, initialContents)));
+            c = scope.wrap(new C(latch, onDone, initialContents));
         } else {
-            svc.submit(new Runner(onDone, latch, initialContents));
+            c = new C(latch, onDone, initialContents);
         }
+        svc.submit(c);
         return latch;
     }
 
-    /**
-     * Submit the initial callable to the thread pool, starting the chain
-     *
-     * @param initialContents Any initial contents for the scope
-     * @return A latch which can be awaited - use this only in tests if you want
-     * actual concurrency!
-     */
-    public CountDownLatch start(Object... initialContents) {
-        return start(null, initialContents);
-    }
-
-    class Runner implements Callable<Object[]> {
-
-        private final Runnable onDone;
-        private final CountDownLatch latch;
-
-        private final AtomicReference<Object[]> contents = new AtomicReference(new Object[0]);
-        private final Defer defer = new Defer();
-
-        Runner(Runnable onDone, CountDownLatch latch, Object... contents) {
-            this.contents.set(contents);
-            this.onDone = onDone;
-            this.latch = latch;
-        }
-
-        @Override
-        public Object[] call() throws Exception {
-            if (!i.hasNext()) {
-                if (onDone != null) {
-                    onDone.run();
-                }
-                latch.countDown();
-                return null;
-            }
-            Object[] result = null;
-            Object[] current = contents.get();
-            try (QuietAutoCloseable e0 = scope.enter(defer)) {
-                try (QuietAutoCloseable e = scope.enter(current)) {
-                    result = i.next().call();
-                }
-            } catch (Abort abort) {
-                try {
-                    if (onDone != null) {
-                        onDone.run();
-                    }
-                } finally {
-                    latch.countDown();
-                }
-                return null;
-            } catch (Error | Exception e) {
-                if (h != null) {
-                    h.uncaughtException(Thread.currentThread(), e);
-                    latch.countDown();
-                    return null;
-                } else {
-                    throw e;
-                }
-            }
-            boolean more = i.hasNext() && result != null;
-            if (more && result != null && result.length > 0) {
-                newContents(current, result);
-            }
-            if (!defer.deferred.get() && more) {
-                if (scope.inScope()) {
-                    svc.submit(scope.wrap(this));
-                } else {
-                    svc.submit(this);
-                }
-            } else if (!more) {
-                if (onDone != null) {
-                    onDone.run();
-                }
-                latch.countDown();
-            }
-            return result;
-        }
-
-        private void newContents(Object[] added, Object[] current) {
-            if (added == null || added.length == 0) {
-                return;
-            }
-            Object[] nue = new Object[current.length + added.length];
-            System.arraycopy(current, 0, nue, 0, current.length);
-            System.arraycopy(added, 0, nue, current.length, added.length);
-            contents.set(nue);
-        }
-
-        private class Defer extends Deferral implements Deferral.Resumer {
-
-            private final AtomicBoolean deferred = new AtomicBoolean();
-
-            boolean isDeferred() {
-                return deferred.get();
-            }
-
-            @Override
-            public Deferral.Resumer defer() {
-                if (deferred.compareAndSet(false, true)) {
-                    return this;
-                }
-                throw new IllegalStateException("Already deferred");
-            }
-
-            @Override
-            public void resume(Object... addToContext) {
-                if (deferred.compareAndSet(true, false)) {
-                    if (addToContext != null && addToContext.length > 0) {
-                        newContents(contents.get(), addToContext);
-                    }
-                    defer.deferred.set(false);
-                    svc.submit(Runner.this);
-                } else {
-                    throw new IllegalStateException("Not paused");
-                }
-            }
+    private static Object[] merge(Object[] a, Object[] b) {
+        if (a.length == 0) {
+            return b;
+        } else if (b.length == 0) {
+            return a;
+        } else {
+            Object[] nue = new Object[a.length + b.length];
+            System.arraycopy(a, 0, nue, 0, a.length);
+            System.arraycopy(b, 0, nue, a.length, b.length);
+            return nue;
         }
     }
 
@@ -255,6 +160,134 @@ public class Treadmill {
              * injected and made available
              */
             public void resume(Object... addToContext);
+        }
+    }
+
+    static class DeferralImpl extends Deferral {
+
+        private volatile boolean deferred;
+        private final ExecutorService svc;
+        private C call;
+        private Callable<Object[]> wrapped;
+        private volatile boolean invalid;
+
+        public DeferralImpl(ExecutorService svc) {
+            this.svc = svc;
+        }
+
+        @Override
+        public Resumer defer() {
+            if (invalid) {
+                throw new IllegalStateException("Cannot defer something which"
+                        + " has already happened");
+            }
+            deferred = true;
+            return new Resumer() {
+
+                @Override
+                public void resume(Object... addToContext) {
+                    if (deferred == false) {
+                        throw new IllegalStateException("Already resumed");
+                    }
+                    deferred = false;
+                    call.include(addToContext);
+                    svc.submit(wrapped);
+                }
+                
+                public String toString() {
+                    return "Resumer of " + call;
+                }
+            };
+        }
+
+        void prepare(Callable<Object[]> wrapped, C actual) {
+            this.wrapped = wrapped;
+            this.call = actual;
+        }
+
+        void done() {
+            invalid = true;
+        }
+        
+        public String toString() {
+            return super.toString() + " over " + call + " + " + wrapped;
+        }
+    }
+
+    private class C implements Callable<Object[]> {
+
+        private final CountDownLatch latch;
+        private final Runnable onDone;
+        private Object[] last;
+        private final DeferralImpl defer = new DeferralImpl(svc);
+
+        public C(CountDownLatch latch, Runnable onDone, Object... last) {
+            this.latch = latch;
+            this.onDone = onDone;
+            this.last = merge(last, new Object[]{defer});
+        }
+
+        void include(Object[] objs) {
+            last = merge(last, objs);
+        }
+
+        private void run() throws Exception {
+            Callable<Object[]> curr = i.next();
+            Object[] nue = curr.call();
+            if (nue != null && i.hasNext()) {
+                C nextActual = new C(latch, onDone, nue);
+                Callable<Object[]> next = scope.wrap(nextActual);
+//                if (defer.deferred) {
+                    defer.prepare(next, nextActual);
+//                } else {
+                if (!defer.deferred) {
+                    svc.submit(next);
+                }
+            } else if (nue == null || !i.hasNext()) {
+                try {
+                    if (onDone != null) {
+                        onDone.run();
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            }
+        }
+
+        @Override
+        public Object[] call() throws Exception {
+            if (i.hasNext()) {
+                try (AutoCloseable cl = scope.enter(last)) {
+                    try {
+                        run();
+                    } catch (Abort abort) {
+                        try {
+                            if (onDone != null) {
+                                onDone.run();
+                            }
+                        } finally {
+                            latch.countDown();
+                        }
+                        return null;
+                    } catch (Error | Exception e) {
+                        if (h != null) {
+                            h.uncaughtException(Thread.currentThread(), e);
+                            latch.countDown();
+                        } else {
+                            throw e;
+                        }
+                    }
+                }
+            } else {
+                try {
+                    if (onDone != null) {
+                        onDone.run();
+                    }
+                } finally {
+                    latch.countDown();
+                }
+            }
+            return null;
         }
     }
 }

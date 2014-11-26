@@ -34,6 +34,7 @@ import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -65,6 +66,18 @@ public abstract class AbstractScope implements Scope {
     private final Set<Class<?>> nullableTypes = new HashSet<>();
     @SuppressWarnings("NonConstantLogger")
     protected final Logger logger = Logger.getLogger(getClass().getName());
+
+    /**
+     * Get the set of all types bound by using methods on this instance.
+     * 
+     * @return The types
+     */
+    public Set<Class<?>> allTypes() {
+        Set<Class<?>> result = new HashSet<>();
+        result.addAll(types);
+        result.addAll(nullableTypes);
+        return Collections.unmodifiableSet(result);
+    }
 
     /**
      * Bind a list of classes in this scope
@@ -115,11 +128,13 @@ public abstract class AbstractScope implements Scope {
     protected <T> void bindInScopeAllowingNulls(Binder binder, Class<T> type) {
         Provider<T> delegate = new NullProvider<>();
         Provider<T> lkpProvider = new ProviderOverLookup<>(type, delegate);
+        nullableTypes.add(type);
         binder.bind(type).toProvider(lkpProvider);
     }
 
     protected <T> void bindInScope(Binder binder, Class<T> type) {
         binder.bind(type).toProvider(new ProviderOverLookup<>(type, new ErrorProvider<>(type)));
+        types.add(type);
     }
 
     /**
