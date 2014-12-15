@@ -112,7 +112,7 @@ public class SynchronousTreadmill {
         private final Runnable onDone;
         private final CountDownLatch latch;
 
-        private final AtomicReference<Object[]> contents = new AtomicReference(new Object[0]);
+        private final AtomicReference<Object[]> contents = new AtomicReference<>(new Object[0]);
         private final Defer defer = new Defer();
 
         Runner(Runnable onDone, CountDownLatch latch, Object... contents) {
