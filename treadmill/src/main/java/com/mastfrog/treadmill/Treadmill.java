@@ -170,6 +170,7 @@ public final class Treadmill {
         private C call;
         private Callable<Object[]> wrapped;
         private volatile boolean invalid;
+        private volatile Object[] addToContext;
 
         public DeferralImpl(ExecutorService svc) {
             this.svc = svc;
@@ -189,11 +190,14 @@ public final class Treadmill {
                     if (deferred == false) {
                         throw new IllegalStateException("Already resumed");
                     }
+                    DeferralImpl.this.addToContext = addToContext;
                     deferred = false;
-                    call.include(addToContext);
-                    svc.submit(wrapped);
+                    if (call != null) {
+                        call.include(addToContext);
+                        svc.submit(wrapped);
+                    }
                 }
-                
+
                 public String toString() {
                     return "Resumer of " + call;
                 }
@@ -203,12 +207,17 @@ public final class Treadmill {
         void prepare(Callable<Object[]> wrapped, C actual) {
             this.wrapped = wrapped;
             this.call = actual;
+            if (addToContext != null) {
+                deferred = false;
+                call.include(addToContext);
+                svc.submit(wrapped);
+            }
         }
 
         void done() {
             invalid = true;
         }
-        
+
         public String toString() {
             return super.toString() + " over " + call + " + " + wrapped;
         }
@@ -238,7 +247,7 @@ public final class Treadmill {
                 C nextActual = new C(latch, onDone, nue);
                 Callable<Object[]> next = scope.wrap(nextActual);
 //                if (defer.deferred) {
-                    defer.prepare(next, nextActual);
+                defer.prepare(next, nextActual);
 //                } else {
                 if (!defer.deferred) {
                     svc.submit(next);
