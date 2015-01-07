@@ -388,7 +388,7 @@ public abstract class AbstractScope implements Scope {
         if (i instanceof WrapInvokable && ((WrapInvokable) i).scope == this) {
             return i;
         }
-        return new WrapInvokable(this, i, arg);
+        return new WrapInvokable<T,R,E>(this, i, arg);
     }
 
     /**
@@ -555,6 +555,7 @@ public abstract class AbstractScope implements Scope {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public Class<? extends T> type(Provider<T> t) {
             return (Class<? extends T>) t.get().getClass();
         }
@@ -649,7 +650,8 @@ public abstract class AbstractScope implements Scope {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> Provider<T> scope(final Key<T> key, final Provider<T> unscoped) {
-        return new ProviderOverLookup(key.getTypeLiteral().getRawType(), unscoped);
+        return new ProviderOverLookup<T>((Class<T>) key.getTypeLiteral().getRawType(), unscoped);
     }
 }
