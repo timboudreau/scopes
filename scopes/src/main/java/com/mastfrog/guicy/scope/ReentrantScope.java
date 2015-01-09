@@ -44,7 +44,9 @@ import org.openide.util.lookup.ProxyLookup;
  */
 public class ReentrantScope extends AbstractScope {
 
-    private final ThreadLocal<LinkedList<Lookup>> stack = new ThreadLocal<>();
+    // This needs to be a synchronized collection - do not replace with
+    // LinkedList
+    private final ThreadLocal<Stack<Lookup>> stack = new ThreadLocal<>();
 
     Object[] includeStackTrace(Object... scopeContents) {
         if (this.includeStackTraces) {
@@ -59,9 +61,9 @@ public class ReentrantScope extends AbstractScope {
     @Override
     public QuietAutoCloseable enter(Object... scopeContents) {
         scopeContents = includeStackTrace(convertObjects(scopeContents));
-        LinkedList<Lookup> lkps = stack.get();
+        Stack<Lookup> lkps = stack.get();
         if (lkps == null) {
-            lkps = new LinkedList<>();
+            lkps = new Stack<>();
             stack.set(lkps);
         }
         if (logger.isLoggable(Level.FINEST)) {
@@ -82,10 +84,19 @@ public class ReentrantScope extends AbstractScope {
             exit();
         }
     }
+    
+    private List<Object> contents() {
+        List<Object> all = new LinkedList<>();
+        Stack<Lookup> lkps = stack.get();
+        for (Lookup lkp : lkps) {
+            all.addAll(lkp.lookupAll(Object.class));
+        }
+        return all;
+    }
 
     @Override
     public void exit() {
-        LinkedList<Lookup> lkps = stack.get();
+        Stack<Lookup> lkps = stack.get();
         assert lkps != null;
         Lookup formerContext = lkps.pop();
         assert formerContext != null;
@@ -105,7 +116,7 @@ public class ReentrantScope extends AbstractScope {
 
     @Override
     protected final Lookup getLookup() {
-        LinkedList<Lookup> lkps = stack.get();
+        Stack<Lookup> lkps = stack.get();
         if (lkps == null) {
             return Lookup.EMPTY;
         } else if (lkps.size() == 1) {

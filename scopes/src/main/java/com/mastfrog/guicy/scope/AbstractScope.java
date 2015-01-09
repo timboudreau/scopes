@@ -42,6 +42,8 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Handler;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.openide.util.Lookup;
 import org.openide.util.lookup.AbstractLookup;
@@ -66,7 +68,7 @@ public abstract class AbstractScope implements Scope {
     private final Set<Class<?>> nullableTypes = new HashSet<>();
     @SuppressWarnings("NonConstantLogger")
     protected final Logger logger = Logger.getLogger(getClass().getName());
-
+    
     /**
      * Get the set of all types bound by using methods on this instance.
      * 
@@ -457,7 +459,8 @@ public abstract class AbstractScope implements Scope {
         WrapCallable(AbstractScope scope, Callable<T> callable) {
             this.scope = scope;
             this.callable = callable;
-            scopeContents = scope.getLookup().lookupAll(Object.class).toArray();
+            Collection<? extends Object> coll = scope.getLookup().lookupAll(Object.class);
+            scopeContents = coll.toArray();
         }
 
         WrapCallable(AbstractScope scope, Callable<T> callable, Object... contents) {
