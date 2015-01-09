@@ -25,8 +25,6 @@ package com.mastfrog.guicy.scope;
 
 import com.google.inject.Scope;
 import com.mastfrog.util.thread.QuietAutoCloseable;
-import com.mastfrog.util.thread.TypedAutoCloseable;
-import static java.lang.Math.E;
 import java.util.concurrent.Callable;
 import org.openide.util.Lookup;
 
