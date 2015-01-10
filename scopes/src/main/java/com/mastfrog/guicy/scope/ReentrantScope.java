@@ -24,10 +24,10 @@
 package com.mastfrog.guicy.scope;
 
 import com.mastfrog.util.thread.QuietAutoCloseable;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.logging.Level;
-import org.openide.util.Lookup;
-import org.openide.util.lookup.ProxyLookup;
 
 /**
  * Base class for scopes which can be reentered multiple times and allow the
@@ -44,9 +44,7 @@ import org.openide.util.lookup.ProxyLookup;
  */
 public class ReentrantScope extends AbstractScope {
 
-    // This needs to be a synchronized collection - do not replace with
-    // LinkedList
-    private final ThreadLocal<Stack<Lookup>> stack = new ThreadLocal<>();
+    private final ThreadLocal<List<Object[]>> lists = new ThreadLocal<>();
 
     Object[] includeStackTrace(Object... scopeContents) {
         if (this.includeStackTraces) {
@@ -58,73 +56,68 @@ public class ReentrantScope extends AbstractScope {
         return scopeContents;
     }
 
-    @Override
-    public QuietAutoCloseable enter(Object... scopeContents) {
-        scopeContents = includeStackTrace(convertObjects(scopeContents));
-        Stack<Lookup> lkps = stack.get();
-        if (lkps == null) {
-            lkps = new Stack<>();
-            stack.set(lkps);
-        }
-        if (logger.isLoggable(Level.FINEST)) {
-            logger.log(Level.FINEST, "Enter {0} entry count {1} with {2}",
-                    new Object[]{getClass().getSimpleName(),
-                        stack.get().size(), Arrays.asList(scopeContents)});
-        }
-        lkps.add(createLookup(scopeContents));
-        return ac;
-    }
-
-    private final AC ac = new AC();
-
-    private final class AC extends QuietAutoCloseable {
+    private final QuietAutoCloseable qac = new QuietAutoCloseable() {
 
         @Override
         public void close() {
             exit();
         }
-    }
-    
-    private List<Object> contents() {
-        List<Object> all = new LinkedList<>();
-        Stack<Lookup> lkps = stack.get();
-        for (Lookup lkp : lkps) {
-            all.addAll(lkp.lookupAll(Object.class));
+    };
+
+    public QuietAutoCloseable enter(Object... o) {
+        List<Object[]> context = lists.get();
+        if (context == null) {
+            context = new ArrayList<>();
+            lists.set(context);
         }
-        return all;
+        context.add(o);
+        return qac;
+    }
+
+    protected List<Object> contents() {
+        List<Object> result = new ArrayList<>();
+        List<Object[]> toSearch = lists.get();
+        if (toSearch != null && !toSearch.isEmpty()) {
+            for (Object[] l : lists.get()) {
+                result.addAll(Arrays.asList(l));
+            }
+        }
+        return result;
     }
 
     @Override
     public void exit() {
-        Stack<Lookup> lkps = stack.get();
-        assert lkps != null;
-        Lookup formerContext = lkps.pop();
-        assert formerContext != null;
+        List<Object[]> l = lists.get();
+        assert l != null;
+        l.remove(l.size() - 1);
         if (logger.isLoggable(Level.FINEST)) {
             logger.log(Level.FINEST, "Exit {0} entry count {1}",
-                    new Object[]{getClass().getSimpleName(), stack.get().size()});
+                    new Object[]{getClass().getSimpleName(), l.size()});
         }
-        if (lkps.isEmpty()) {
-            stack.remove();
+        if (l.isEmpty()) {
+            lists.remove();
         }
     }
 
-    @Override
-    public final boolean inScope() {
-        return stack.get() != null;
+    public boolean inScope() {
+        List<?> l = this.lists.get();
+        return l != null && !l.isEmpty();
     }
 
     @Override
-    protected final Lookup getLookup() {
-        Stack<Lookup> lkps = stack.get();
-        if (lkps == null) {
-            return Lookup.EMPTY;
-        } else if (lkps.size() == 1) {
-            return lkps.iterator().next();
-        } else {
-            List<Lookup> all = new ArrayList<>(lkps);
-            Collections.reverse(lkps);
-            return new ProxyLookup(all.toArray(new Lookup[all.size()]));
+    protected <T> T get(Class<T> type) {
+        List<Object[]> toSearch = lists.get();
+        if (toSearch != null && !toSearch.isEmpty()) {
+            for (int i = toSearch.size() - 1; i >= 0; i--) {
+                Object[] curr = toSearch.get(i);
+                for (int j = curr.length - 1; j >= 0; j--) {
+                    Object o = curr[j];
+                    if (type.isInstance(o)) {
+                        return type.cast(o);
+                    }
+                }
+            }
         }
+        return null;
     }
 }

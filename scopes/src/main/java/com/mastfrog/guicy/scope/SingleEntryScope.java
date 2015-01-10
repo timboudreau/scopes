@@ -25,8 +25,10 @@ package com.mastfrog.guicy.scope;
 
 import com.google.inject.Scope;
 import com.mastfrog.util.thread.QuietAutoCloseable;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Callable;
-import org.openide.util.Lookup;
 
 /**
  * Base class for ThreadLocal-based scopes with ad-hoc contents
@@ -34,10 +36,17 @@ import org.openide.util.Lookup;
  * @author Tim Boudreau
  */
 public class SingleEntryScope extends AbstractScope implements Scope {
-    private final ThreadLocal<Lookup> values = new ThreadLocal<Lookup>();
 
-    public void run (Runnable toRun, Object... scopeContents) {
-        enter (scopeContents);
+    private final ThreadLocal<Object[]> values = new ThreadLocal<>();
+
+    @Override
+    protected List<Object> contents() {
+        Object[] result = values.get();
+        return result == null ? Collections.emptyList() : Arrays.asList(result);
+    }
+
+    public void run(Runnable toRun, Object... scopeContents) {
+        enter(scopeContents);
         try {
             toRun.run();
         } finally {
@@ -45,8 +54,8 @@ public class SingleEntryScope extends AbstractScope implements Scope {
         }
     }
 
-    public <T> T call (Callable<T> toCall, Object... scopeContents) throws Exception {
-        enter (scopeContents);
+    public <T> T call(Callable<T> toCall, Object... scopeContents) throws Exception {
+        enter(scopeContents);
         try {
             return toCall.call();
         } finally {
@@ -58,7 +67,7 @@ public class SingleEntryScope extends AbstractScope implements Scope {
         if (values.get() != null) {
             throw new IllegalStateException("Already in scope " + this);
         }
-        values.set(createLookup(scopeContents));
+        values.set(scopeContents);
         return new QuietAutoCloseable() {
             @Override
             public void close() {
@@ -68,18 +77,18 @@ public class SingleEntryScope extends AbstractScope implements Scope {
     }
 
     protected <T> T get(Class<T> type) {
-        Lookup lkp = getLookup();
-        return lkp == null ? null : lkp.lookup(type);
+        Object[] contents = values.get();
+        for (int i = contents.length - 1; i >= 0; i--) {
+            if (type.isInstance(contents[i])) {
+                return type.cast(contents[i]);
+            }
+        }
+        return null;
     }
 
     @Override
     public boolean inScope() {
         return values.get() != null;
-    }
-
-    @Override
-    protected Lookup getLookup() {
-        return values.get();
     }
 
     protected void exit() {

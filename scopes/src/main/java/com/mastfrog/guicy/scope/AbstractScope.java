@@ -28,32 +28,24 @@ import com.google.inject.Injector;
 import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.Scope;
+import com.google.inject.util.Providers;
 import com.mastfrog.util.Invokable;
 import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Handler;
-import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.openide.util.Lookup;
-import org.openide.util.lookup.AbstractLookup;
-import org.openide.util.lookup.InstanceContent;
-import org.openide.util.lookup.Lookups;
-import org.openide.util.lookup.ProxyLookup;
 
 /**
- * Base class for custom scope implementations.  The basic model here is that
- * you "enter" a scope with some objects which can be injected within the scope.
+ * Base class for custom scope implementations. The basic model here is that you
+ * "enter" a scope with some objects which can be injected within the scope.
  * <p/>
  * If you want to get objects injected without having to handle the injector,
  * bind AbstractScope to some scope instance, and then inject ScopeRunner, which
@@ -68,10 +60,10 @@ public abstract class AbstractScope implements Scope {
     private final Set<Class<?>> nullableTypes = new HashSet<>();
     @SuppressWarnings("NonConstantLogger")
     protected final Logger logger = Logger.getLogger(getClass().getName());
-    
+
     /**
      * Get the set of all types bound by using methods on this instance.
-     * 
+     *
      * @return The types
      */
     public Set<Class<?>> allTypes() {
@@ -119,16 +111,8 @@ public abstract class AbstractScope implements Scope {
         return new ScopeRunner(inj, this);
     }
 
-    private static final class NullProvider<T> implements Provider<T> {
-
-        @Override
-        public T get() {
-            return null;
-        }
-    }
-
     protected <T> void bindInScopeAllowingNulls(Binder binder, Class<T> type) {
-        Provider<T> delegate = new NullProvider<>();
+        Provider<T> delegate = Providers.of(null);
         Provider<T> lkpProvider = new ProviderOverLookup<>(type, delegate);
         nullableTypes.add(type);
         binder.bind(type).toProvider(lkpProvider);
@@ -183,12 +167,11 @@ public abstract class AbstractScope implements Scope {
      * methods that takes Runnable/Callable/Invokable where possible.
      * <p/>
      * Remember that an objects you pass to <code>enter()</code> <i>must</i>
-     * be bound in this scope.  The method <code>bindTypes()</code> is here
-     * to assist with that, or you can simply use the usual
+     * be bound in this scope. The method <code>bindTypes()</code> is here to
+     * assist with that, or you can simply use the usual
      * <code>bind(Foo.class).in(scope)</code> syntax.
      *
-     * @param scopeContents Any objects which should be available for
-     * injection
+     * @param scopeContents Any objects which should be available for injection
      * @return An instance of AutoClosable which can be used with JDK-7's
      * try-with-resources to ensure the scope is exited.
      */
@@ -201,16 +184,13 @@ public abstract class AbstractScope implements Scope {
 
     /**
      * Get an object in scope, if any. Throws an exception if not in scope, or
-     * if in scope but not bound (see
-     * <code>bindAllowingNulls()</code>).
+     * if in scope but not bound (see <code>bindAllowingNulls()</code>).
      *
      * @param <T>
      * @param type
      * @return
      */
-    protected <T> T get(Class<T> type) {
-        return getLookup().lookup(type);
-    }
+    protected abstract <T> T get(Class<T> type);
 
     /**
      * Test if the caller is in scope.
@@ -255,14 +235,13 @@ public abstract class AbstractScope implements Scope {
      * @return true if one is present
      */
     public boolean contains(Class<?> type) {
-        return getLookup().lookup(type) != null;
+        return get(type) != null;
     }
 
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder(getClass().getSimpleName()).append("{");
-        for (Iterator<? extends Object> it= getLookup().lookupAll(Object.class).iterator(); it.hasNext();) {
-            Object o = it.next();
+        for (Object o : contents()) {
             sb.append('\t').append(o.getClass().getName()).append(": ").append(o).append('\n');
         }
         return sb.append("}").toString();
@@ -342,7 +321,7 @@ public abstract class AbstractScope implements Scope {
         if (!inScope()) {
             throw new IllegalThreadStateException("Not in scope " + this);
         }
-        final Object[] o = getLookup().lookupAll(Object.class).toArray();
+        final Object[] o = contents().toArray();
         executor.submit(new Runnable() {
             @Override
             public void run() {
@@ -390,7 +369,7 @@ public abstract class AbstractScope implements Scope {
         if (i instanceof WrapInvokable && ((WrapInvokable) i).scope == this) {
             return i;
         }
-        return new WrapInvokable<T,R,E>(this, i, arg);
+        return new WrapInvokable<T, R, E>(this, i, arg);
     }
 
     /**
@@ -399,19 +378,40 @@ public abstract class AbstractScope implements Scope {
      * @param callable A callable
      * @return A wrapper which delegates to this callable
      */
-    public <T> Callable<T> wrap(final Callable<T> callable) {
-        if (callable instanceof WrapCallable<?> && ((WrapCallable<?>) callable).scope == this) {
-            return callable;
-        }
-        if (!inScope()) {
-            throw new IllegalThreadStateException("Not in scope " + this);
-        }
-        return new WrapCallable<>(this, callable);
+    public <T> Callable<T> wrap(Callable<T> wrapped) {
+        return new WrapCallable<>(wrapped);
     }
 
     public <T> Callable<T> wrap(Callable<T> callable, Object... contents) {
-        return new WrapCallable<T>(this, callable, contents);
+        return new WrapCallable<>(callable, contents);
     }
+
+    private class WrapCallable<T> implements Callable<T> {
+
+        private final Callable<T> wrapped;
+        private final Object[] contents;
+
+        public WrapCallable(Callable<T> wrapped, Object... contents) {
+            this.wrapped = wrapped;
+            List<Object> l = AbstractScope.this.contents();
+            l.addAll(Arrays.asList(contents));
+            this.contents = l.toArray();
+        }
+
+        public WrapCallable(Callable<T> wrapped) {
+            this.wrapped = wrapped;
+            contents = contents().toArray(new Object[0]);
+        }
+
+        @Override
+        public T call() throws Exception {
+            try (QuietAutoCloseable qac = enter(contents)) {
+                return wrapped.call();
+            }
+        }
+    }
+
+    protected abstract List<Object> contents();
 
     static class WrapRunnable implements Runnable {
 
@@ -423,8 +423,7 @@ public abstract class AbstractScope implements Scope {
         WrapRunnable(Runnable run, AbstractScope scope) {
             this.run = run;
             this.scope = scope;
-            Collection<?> all = scope.getLookup().lookupAll(Object.class);
-            scopeContents = all.toArray(new Object[all.size()]);
+            scopeContents = scope.contents().toArray();
         }
 
         @Override
@@ -450,44 +449,6 @@ public abstract class AbstractScope implements Scope {
         }
     }
 
-    static class WrapCallable<T> implements Callable<T> {
-
-        private final AbstractScope scope;
-        private final Callable<T> callable;
-        private final Object[] scopeContents;
-
-        WrapCallable(AbstractScope scope, Callable<T> callable) {
-            this.scope = scope;
-            this.callable = callable;
-            Collection<? extends Object> coll = scope.getLookup().lookupAll(Object.class);
-            scopeContents = coll.toArray();
-        }
-
-        WrapCallable(AbstractScope scope, Callable<T> callable, Object... contents) {
-            this.scope = scope;
-            this.callable = callable;
-            this.scopeContents = contents;
-        }
-
-        Callable<T> unwrap() {
-            return callable;
-        }
-
-        public String toString() {
-            return callable.toString();
-        }
-
-        @Override
-        public T call() throws Exception {
-            scope.enter(scopeContents);
-            try {
-                return callable.call();
-            } finally {
-                scope.exit();
-            }
-        }
-    }
-
     static class WrapInvokable<T, R, E extends Exception> extends Invokable<T, R, E> {
 
         private final AbstractScope scope;
@@ -498,7 +459,7 @@ public abstract class AbstractScope implements Scope {
         WrapInvokable(AbstractScope scope, Invokable<T, R, E> callable, AtomicReference<T> arg) {
             this.scope = scope;
             this.invokable = callable;
-            scopeContents = scope.getLookup().lookupAll(Object.class).toArray();
+            scopeContents = scope.contents().toArray();
             this.arg = arg;
         }
 
@@ -521,61 +482,6 @@ public abstract class AbstractScope implements Scope {
         }
     }
 
-    protected Lookup createLookup(Object... scopeContents) {
-        List<Object> contents = new ArrayList<>(Arrays.asList(scopeContents));
-        List<Provider<?>> providers = new ArrayList<>();
-        for (Iterator<Object> it = contents.iterator(); it.hasNext();) {
-            Object o = it.next();
-            if (o instanceof Provider) {
-                Provider<?> p = (Provider<?>) o;
-                providers.add(p);
-                it.remove();
-            }
-        }
-        if (providers.isEmpty()) {
-            Lookup lkp = Lookups.fixed(scopeContents);
-            return lkp;
-        } else {
-            Lookup lkp = Lookups.fixed(contents.toArray());
-            InstanceContent content = new InstanceContent();
-            for (Provider<?> p : providers) {
-                addToContent(p, content);
-            }
-            return new ProxyLookup(lkp, new AbstractLookup(content));
-        }
-    }
-
-    private <T> void addToContent(Provider<T> provider, InstanceContent content) {
-        //this method exists simply to avoid a compiler warning
-        content.add(provider, new IC<T>());
-    }
-
-    private static final class IC<T> implements InstanceContent.Convertor<Provider<T>, T> {
-
-        @Override
-        public T convert(Provider<T> t) {
-            return t.get();
-        }
-
-        @Override
-        @SuppressWarnings("unchecked")
-        public Class<? extends T> type(Provider<T> t) {
-            return (Class<? extends T>) t.get().getClass();
-        }
-
-        @Override
-        public String id(Provider<T> t) {
-            return t.toString();
-        }
-
-        @Override
-        public String displayName(Provider<T> t) {
-            return t.toString();
-        }
-    }
-
-    protected abstract Lookup getLookup();
-
     private final class ErrorProvider<T> implements Provider<T> {
 
         private final Class<T> type;
@@ -588,24 +494,22 @@ public abstract class AbstractScope implements Scope {
         public T get() {
             String typeName = type.getSimpleName();
             if (inScope()) {
-                Lookup lookup = getLookup();
-                assert lookup.lookup(type) == null : "Error provider for "
-                        + typeName + " erroneouslly called";
+                Collection<?> contents = contents();
                 IllegalStateException ise = new IllegalStateException("In "
                         + AbstractScope.this.getClass().getSimpleName()
                         + " but no instance of " + typeName + " available. "
                         + " Scope contents: "
-                        + Lookups.exclude(lookup, Throwable.class).lookupAll(Object.class)
-                        + " Bound in scope: " + bindings(Lookups.exclude(lookup, Throwable.class)));
+                        + contents
+                        + " Bound in scope: " + types + " " + nullableTypes);
 
                 if (includeStackTraces) {
-                    Throwable curr = ise;
-                    for (Throwable t : lookup.lookupAll(Throwable.class)) {
-                        if (curr.getCause() == null) {
-                            curr.initCause(t);
-                        }
-                        curr = t;
-                    }
+//                    Throwable curr = ise;
+//                    for (Throwable t : lookup.lookupAll(Throwable.class)) {
+//                        if (curr.getCause() == null) {
+//                            curr.initCause(t);
+//                        }
+//                        curr = t;
+//                    }
                 }
                 throw ise;
             }
@@ -613,7 +517,7 @@ public abstract class AbstractScope implements Scope {
                 throw new IllegalStateException("No instance of " + typeName
                         + " available outside "
                         + AbstractScope.this.getClass().getSimpleName()
-                        + " scope. Scope is " + this + " with contents " + getLookup().lookup(Object.class));
+                        + " scope. Scope is " + this + " with contents " + contents());
             } else {
                 throw new IllegalStateException("No instance of " + typeName
                         + " available outside "
@@ -621,14 +525,6 @@ public abstract class AbstractScope implements Scope {
                         + " scope");
             }
         }
-    }
-
-    private String bindings(Lookup lookup) {
-        StringBuilder sb = new StringBuilder(" Bindings:");
-        for (Class<?> c : types) {
-            sb.append(c.getName()).append('=').append(lookup.lookupAll(c)).append(",");
-        }
-        return sb.toString();
     }
 
     private final class ProviderOverLookup<T> implements Provider<T> {
@@ -643,8 +539,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public T get() {
-            Lookup lkp = getLookup();
-            T result = lkp == null ? null : lkp.lookup(type);
+            T result = AbstractScope.this.get(type);
             if (result == null) {
                 result = delegate == null ? null : delegate.get();
             }
