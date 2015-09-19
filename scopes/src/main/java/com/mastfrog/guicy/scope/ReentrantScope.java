@@ -67,7 +67,7 @@ public class ReentrantScope extends AbstractScope {
     public QuietAutoCloseable enter(Object... o) {
         List<Object[]> context = lists.get();
         if (context == null) {
-            context = new ArrayList<>();
+            context = new ArrayList<>(20);
             lists.set(context);
         }
         context.add(o);
@@ -75,7 +75,7 @@ public class ReentrantScope extends AbstractScope {
     }
 
     protected List<Object> contents() {
-        List<Object> result = new ArrayList<>();
+        List<Object> result = new ArrayList<>(40);
         List<Object[]> toSearch = lists.get();
         if (toSearch != null && !toSearch.isEmpty()) {
             for (Object[] l : lists.get()) {
