@@ -154,6 +154,7 @@ public class ReentrantScope2Test {
     private static final Object[] contents3 = new Object[]{"three", new HashSet<>(Arrays.asList("foo", "bar")), true};
     private static final Object[] contents4 = new Object[]{new StringBuilder("more"), 24F, new Date()};
 
+    @SuppressWarnings("unchecked")
     public void benchmark(Scope scope) {
         Provider<?>[] ps = new Provider<?>[]{
             scope.scope((Key) Key.get(String.class), Providers.of(null)),
