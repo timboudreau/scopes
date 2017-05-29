@@ -4,7 +4,7 @@
     <parent>
         <groupId>com.mastfrog</groupId>
         <artifactId>scopes-parent</artifactId>
-        <version>1.7.0-dev</version>
+        <version>1.7.0</version>
     </parent>
     <artifactId>treadmill</artifactId>
     <name>Treadmill</name>
