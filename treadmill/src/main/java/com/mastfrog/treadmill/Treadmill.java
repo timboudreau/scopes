@@ -23,7 +23,7 @@
  */
 package com.mastfrog.treadmill;
 
-import com.mastfrog.guicy.scope.ReentrantScope;
+import com.mastfrog.giulius.scope.ReentrantScope;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;

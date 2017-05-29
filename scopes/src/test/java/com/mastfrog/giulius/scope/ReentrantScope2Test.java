@@ -23,8 +23,10 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.mastfrog.guicy.scope;
+package com.mastfrog.giulius.scope;
 
+import com.mastfrog.giulius.scope.ReentrantScope;
+import com.mastfrog.giulius.scope.ReentrantScope2;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Inject;
@@ -34,7 +36,7 @@ import com.google.inject.Provider;
 import com.google.inject.Scope;
 import com.google.inject.Stage;
 import com.google.inject.util.Providers;
-import com.mastfrog.guicy.scope.ReentrantScope2.ScopeRunner2;
+import com.mastfrog.giulius.scope.ReentrantScope2.ScopeRunner2;
 import com.mastfrog.util.Invokable;
 import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.io.IOException;

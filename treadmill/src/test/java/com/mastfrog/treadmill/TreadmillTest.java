@@ -4,7 +4,7 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.util.Providers;
-import com.mastfrog.guicy.scope.ReentrantScope;
+import com.mastfrog.giulius.scope.ReentrantScope;
 import com.mastfrog.treadmill.Treadmill.Deferral;
 import com.mastfrog.treadmill.Treadmill.Deferral.Resumer;
 import java.lang.Thread.UncaughtExceptionHandler;

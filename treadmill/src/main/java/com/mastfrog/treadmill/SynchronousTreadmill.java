@@ -23,7 +23,7 @@
  */
 package com.mastfrog.treadmill;
 
-import com.mastfrog.guicy.scope.ReentrantScope;
+import com.mastfrog.giulius.scope.ReentrantScope;
 import com.mastfrog.treadmill.Treadmill.Deferral;
 import com.mastfrog.treadmill.Treadmill.Deferral.Resumer;
 import com.mastfrog.util.Exceptions;

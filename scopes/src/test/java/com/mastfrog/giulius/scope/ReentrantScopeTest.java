@@ -23,8 +23,11 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.mastfrog.guicy.scope;
+package com.mastfrog.giulius.scope;
 
+import com.mastfrog.giulius.scope.AbstractScope;
+import com.mastfrog.giulius.scope.ReentrantScope;
+import com.mastfrog.giulius.scope.ScopeRunner;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Inject;

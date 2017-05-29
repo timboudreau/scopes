@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package com.mastfrog.guicy.scope;
+package com.mastfrog.giulius.scope;
 
 import com.google.inject.Inject;
 import com.google.inject.Injector;
