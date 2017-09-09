@@ -23,6 +23,7 @@
  */
 package com.mastfrog.giulius.scope;
 
+import com.google.inject.Provider;
 import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -45,6 +46,22 @@ import java.util.logging.Level;
 public class ReentrantScope extends AbstractScope {
 
     private final ThreadLocal<List<Object[]>> lists = new ThreadLocal<>();
+
+    public ReentrantScope() {
+        super();
+    }
+
+    /**
+     * Create a scope with a provider for information to use in error messages when something
+     * unavailable is requested for injection.  The Provider interface is used here simply to
+     * decouple the actual code doing this from the scopes module.
+     *
+     * @see com.mastfrog.giulius.InjectionInfo
+     * @param injectionInfoProvider
+     */
+    public ReentrantScope(Provider<String> injectionInfoProvider) {
+        super(injectionInfoProvider);
+    }
 
     Object[] includeStackTrace(Object... scopeContents) {
         if (this.includeStackTraces) {

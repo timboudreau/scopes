@@ -32,10 +32,13 @@ import com.google.inject.util.Providers;
 import com.mastfrog.util.Invokable;
 import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.lang.annotation.Annotation;
+import java.lang.reflect.TypeVariable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -60,6 +63,25 @@ public abstract class AbstractScope implements Scope {
     private final Set<Class<?>> nullableTypes = new HashSet<>();
     @SuppressWarnings("NonConstantLogger")
     protected final Logger logger = Logger.getLogger(getClass().getName());
+
+    private final Provider<String> injectionInfoProvider;
+
+    public AbstractScope() {
+        this(Providers.of(""));
+    }
+
+    /**
+     * Create a scope with a provider for information to use in error messages when something
+     * unavailable is requested for injection.  The Provider interface is used here simply to
+     * decouple the actual code doing this from the scopes module.
+     *
+     * @see com.mastfrog.giulius.InjectionInfo
+     * @param injectionInfoProvider
+     */
+    public AbstractScope(Provider<String> injectionInfoProvider) {
+        this.injectionInfoProvider = injectionInfoProvider;
+    }
+
 
     /**
      * Get the set of all types bound by using methods on this instance.
@@ -493,14 +515,23 @@ public abstract class AbstractScope implements Scope {
         @Override
         public T get() {
             String typeName = type.getSimpleName();
+            TypeVariable<Class<T>>[] tps = type.getTypeParameters();
+            if (tps != null && tps.length > 0) {
+                StringBuilder sb = new StringBuilder(typeName).append("<");
+                for (TypeVariable<Class<T>> c : tps) {
+                    sb.append(c);
+                }
+                typeName = sb.append('>').toString();
+            }
+            String info = injectionInfoProvider.get();
             if (inScope()) {
                 Collection<?> contents = contents();
-                IllegalStateException ise = new IllegalStateException("In "
+                IllegalStateException ise = new IllegalStateException(info + " in "
                         + AbstractScope.this.getClass().getSimpleName()
                         + " but no instance of " + typeName + " available. "
                         + " Scope contents: "
-                        + contents
-                        + " Bound in scope: " + types + " " + nullableTypes);
+                        + scopeContents(contents)
+                        + " Bound in scope: " + types(types) + " " + nullableTypes);
 
                 if (includeStackTraces) {
 //                    Throwable curr = ise;
@@ -512,19 +543,34 @@ public abstract class AbstractScope implements Scope {
 //                    }
                 }
                 throw ise;
-            }
-            if (inScope()) {
-                throw new IllegalStateException("No instance of " + typeName
-                        + " available outside "
-                        + AbstractScope.this.getClass().getSimpleName()
-                        + " scope. Scope is " + this + " with contents " + contents());
             } else {
-                throw new IllegalStateException("No instance of " + typeName
+                throw new IllegalStateException(info + " not in this scope, and "
+                        + "no instance of " + typeName
                         + " available outside "
                         + AbstractScope.this.getClass().getSimpleName()
                         + " scope");
             }
         }
+    }
+    
+    private static String types(Set<Class<?>> types) {
+        List<Class<?>> l = new ArrayList<>(types);
+        Collections.sort(l, (Class<?> o1, Class<?> o2) -> o1.getSimpleName().compareTo(o2.getSimpleName()));
+        StringBuilder sb = new StringBuilder();
+        for (Class<?> c : l) {
+            sb.append("\n").append(c.getSimpleName()).append("\t\t").append(c.getPackage());
+        }
+        return sb.toString();
+    }
+
+    private static String scopeContents(Collection<?> c) {
+        StringBuilder sb = new StringBuilder();
+        for (Iterator<?> it =c.iterator(); it.hasNext();) {
+            Object o = it.next();
+            sb.append("\n - ").append(o).append(" (").append(o.getClass().getSimpleName()).append(')');
+        }
+        sb.append("\n");
+        return sb.toString();
     }
 
     private final class ProviderOverLookup<T> implements Provider<T> {
