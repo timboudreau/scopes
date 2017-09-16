@@ -30,6 +30,7 @@ import com.google.inject.Provider;
 import com.google.inject.Scope;
 import com.google.inject.util.Providers;
 import com.mastfrog.util.Invokable;
+import com.mastfrog.util.strings.AlignedText;
 import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.TypeVariable;
@@ -71,9 +72,10 @@ public abstract class AbstractScope implements Scope {
     }
 
     /**
-     * Create a scope with a provider for information to use in error messages when something
-     * unavailable is requested for injection.  The Provider interface is used here simply to
-     * decouple the actual code doing this from the scopes module.
+     * Create a scope with a provider for information to use in error messages
+     * when something unavailable is requested for injection. The Provider
+     * interface is used here simply to decouple the actual code doing this from
+     * the scopes module.
      *
      * @see com.mastfrog.giulius.InjectionInfo
      * @param injectionInfoProvider
@@ -81,7 +83,6 @@ public abstract class AbstractScope implements Scope {
     public AbstractScope(Provider<String> injectionInfoProvider) {
         this.injectionInfoProvider = injectionInfoProvider;
     }
-
 
     /**
      * Get the set of all types bound by using methods on this instance.
@@ -526,12 +527,13 @@ public abstract class AbstractScope implements Scope {
             String info = injectionInfoProvider.get();
             if (inScope()) {
                 Collection<?> contents = contents();
-                IllegalStateException ise = new IllegalStateException(info + " in "
+                String message = info + " in "
                         + AbstractScope.this.getClass().getSimpleName()
                         + " but no instance of " + typeName + " available. "
                         + " Scope contents: "
                         + scopeContents(contents)
-                        + " Bound in scope: " + types(types) + " " + nullableTypes);
+                        + " Bound in scope: " + types(types) + " " + nullableTypes;
+                IllegalStateException ise = new IllegalStateException(new AlignedText(message).toString());
 
                 if (includeStackTraces) {
 //                    Throwable curr = ise;
@@ -552,22 +554,26 @@ public abstract class AbstractScope implements Scope {
             }
         }
     }
-    
+
     private static String types(Set<Class<?>> types) {
         List<Class<?>> l = new ArrayList<>(types);
         Collections.sort(l, (Class<?> o1, Class<?> o2) -> o1.getSimpleName().compareTo(o2.getSimpleName()));
         StringBuilder sb = new StringBuilder();
         for (Class<?> c : l) {
-            sb.append("\n").append(c.getSimpleName()).append("\t\t").append(c.getPackage());
+            sb.append("\n").append(c.getSimpleName()).append("\t").append(c.getPackage());
         }
         return sb.toString();
     }
 
     private static String scopeContents(Collection<?> c) {
         StringBuilder sb = new StringBuilder();
-        for (Iterator<?> it =c.iterator(); it.hasNext();) {
+        for (Iterator<?> it = c.iterator(); it.hasNext();) {
             Object o = it.next();
-            sb.append("\n - ").append(o).append(" (").append(o.getClass().getSimpleName()).append(')');
+            if (o == null) {
+                sb.append("\n  null\t(NULL?!!!)");
+            } else {
+                sb.append("\n ").append(o).append("\t").append(o.getClass().getSimpleName());
+            }
         }
         sb.append("\n");
         return sb.toString();
