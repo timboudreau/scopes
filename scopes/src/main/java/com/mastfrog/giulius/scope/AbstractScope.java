@@ -372,6 +372,21 @@ public abstract class AbstractScope implements Scope {
         return new ScopedThreadPool(this, service);
     }
 
+    public Provider<ExecutorService> wrapThreadPool(Provider<ExecutorService> exe) {
+        return new Provider<ExecutorService>() {
+            private ExecutorService val;
+
+            @Override
+            public ExecutorService get() {
+                if (val != null) {
+                    return val;
+                }
+                ExecutorService orig = exe.get();
+                return val = new ScopedThreadPool(AbstractScope.this, orig);
+            }
+        };
+    }
+
     /**
      * Wrap a runnable to enter this scope before it is run
      *
