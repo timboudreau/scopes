@@ -95,7 +95,7 @@ public class ReentrantScope extends AbstractScope {
         List<Object> result = new ArrayList<>(40);
         List<Object[]> toSearch = lists.get();
         if (toSearch != null && !toSearch.isEmpty()) {
-            for (Object[] l : lists.get()) {
+            for (Object[] l : toSearch) {
                 result.addAll(Arrays.asList(l));
             }
         }
@@ -125,7 +125,8 @@ public class ReentrantScope extends AbstractScope {
     protected <T> T get(Class<T> type) {
         List<Object[]> toSearch = lists.get();
         if (toSearch != null && !toSearch.isEmpty()) {
-            for (int i = toSearch.size() - 1; i >= 0; i--) {
+            int max = toSearch.size();
+            for (int i = max - 1; i >= 0; i--) {
                 Object[] curr = toSearch.get(i);
                 for (int j = curr.length - 1; j >= 0; j--) {
                     Object o = curr[j];
