@@ -28,10 +28,11 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.google.inject.Key;
 import com.google.inject.Provider;
-import com.google.inject.Scope;
 import com.mastfrog.util.Invokable;
+import com.mastfrog.util.Strings;
 import com.mastfrog.util.collections.CollectionUtils;
-import com.mastfrog.util.thread.QuietAutoCloseable;
+import static com.mastfrog.util.collections.CollectionUtils.reversed;
+import com.mastfrog.util.thread.NonThrowingAutoCloseable;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,7 +53,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * @author Tim Boudreau
  */
-public class ReentrantScope2 extends QuietAutoCloseable implements Scope {
+public class ReentrantScope2 extends AbstractScope implements NonThrowingAutoCloseable {
 
     private int[] types = new int[0];
     private boolean[] nullable = new boolean[0];
@@ -81,10 +82,29 @@ public class ReentrantScope2 extends QuietAutoCloseable implements Scope {
             return null;
         }
         Object result = null;
-        for (Object[] arr : CollectionUtils.reversed(objs)) {
+        int id = 0;
+        for (Object[] arr : objs) {
             result = arr[ix];
             if (result != null) {
+                if (type == CharSequence.class) {
+                    System.out.println("FOUND " + result + " in slot " + ix + " for CharSequence in arr " + id);
+                }
                 break;
+            }
+            id++;
+        }
+        if (result == null) {
+            System.out.println("FAILOVER SEARCH " + type.getName());
+            for (Object[] arr : reversed(objs)) {
+                System.out.println("SEARCH " + Strings.join(',', objs));
+                for (int i = arr.length - 1; i >= 0; i--) {
+                    Object o = arr[i];
+                    if (type.isInstance(o)) {
+                        System.out.println("  MATCH ON " + o + " at " + i);
+                        result = o;
+                        break;
+                    }
+                }
             }
         }
         if (result == null && throwIfNecessaryOnNull && !nullable[ix]) {
@@ -201,6 +221,11 @@ public class ReentrantScope2 extends QuietAutoCloseable implements Scope {
         return prvdr;
     }
 
+    @Override
+    protected <T> T get(Class<T> type) {
+        return lookup(type, false);
+    }
+
     private static class DelegateProvider<T> implements Provider<T> {
 
         private final Provider<T> a;
@@ -249,8 +274,10 @@ public class ReentrantScope2 extends QuietAutoCloseable implements Scope {
                 return null;
             }
             Object result = null;
-            int mx = objs.size() - 1;
-            for (int i = mx; i >= 0; i--) {
+//            int mx = objs.size() - 1;
+//            for (int i = mx; i >= 0; i--) {
+            int mx = objs.size();
+            for (int i = 0; i < mx; i++) {
                 Object[] arr = objs.get(i);
                 result = arr[ix];
                 if (result != null) {
@@ -340,7 +367,7 @@ public class ReentrantScope2 extends QuietAutoCloseable implements Scope {
         }
     }
 
-    protected QuietAutoCloseable enter(Object... scopeContents) {
+    protected NonThrowingAutoCloseable enter(Object... scopeContents) {
         Object[] contents = pooledArray();
         for (Object c : scopeContents) {
             int ix = indexOf(c);
@@ -348,17 +375,19 @@ public class ReentrantScope2 extends QuietAutoCloseable implements Scope {
                 contents[ix] = classes[ix].cast(c);
             }
         }
-        List<Object[]> objs = contents(true);
-        objs.add(contents);
+        LinkedList<Object[]> objs = contents(true);
+        objs.push(contents);
         return this;
     }
 
     protected void exit() {
         LinkedList<Object[]> objs = contents(false);
-        if (objs.isEmpty()) {
+        if (objs == null || objs.isEmpty()) {
             throw new IllegalStateException("Asymmetric calls to enter and exit");
         }
-        arrays.add(objs.pop());
+        Object[] reuse = objs.pop();
+        Arrays.fill(reuse, null);
+        arrays.add(reuse);
     }
 
     public void close() {
@@ -381,10 +410,6 @@ public class ReentrantScope2 extends QuietAutoCloseable implements Scope {
         for (Class<?> type : types) {
             bindInScopeAllowingNulls(binder, type);
         }
-    }
-
-    public final ScopeRunner2 runner(Injector inj) {
-        return new ScopeRunner2(inj, this);
     }
 
     @SuppressWarnings("unchecked")
@@ -588,7 +613,7 @@ public class ReentrantScope2 extends QuietAutoCloseable implements Scope {
 
         @Override
         public T call() throws Exception {
-            try (QuietAutoCloseable qac = enter(contents)) {
+            try (NonThrowingAutoCloseable qac = enter(contents)) {
                 return wrapped.call();
             }
         }

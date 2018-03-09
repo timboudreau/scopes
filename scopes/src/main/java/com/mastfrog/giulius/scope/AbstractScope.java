@@ -31,7 +31,7 @@ import com.google.inject.Scope;
 import com.google.inject.util.Providers;
 import com.mastfrog.util.Invokable;
 import com.mastfrog.util.strings.AlignedText;
-import com.mastfrog.util.thread.QuietAutoCloseable;
+import com.mastfrog.util.thread.NonThrowingAutoCloseable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
@@ -124,13 +124,13 @@ public abstract class AbstractScope implements Scope {
      * @param types An array of types
      */
     protected void bindAllowingNulls(Binder binder, Class<?>... types) {
-        for (Class<?> type : nullableTypes) {
+        for (Class<?> type : types) {
             bindInScopeAllowingNulls(binder, type);
             this.nullableTypes.add(type);
         }
     }
 
-    public final ScopeRunner runner(Injector inj) {
+    public ScopeRunner runner(Injector inj) {
         return new ScopeRunner(inj, this);
     }
 
@@ -198,7 +198,7 @@ public abstract class AbstractScope implements Scope {
      * @return An instance of AutoClosable which can be used with JDK-7's
      * try-with-resources to ensure the scope is exited.
      */
-    protected abstract QuietAutoCloseable enter(Object... scopeContents);
+    protected abstract NonThrowingAutoCloseable enter(Object... scopeContents);
 
     /**
      * Exit the scope. Must be called symmetrically with enter.
@@ -443,7 +443,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public T call() throws Exception {
-            try (QuietAutoCloseable qac = enter(contents)) {
+            try (NonThrowingAutoCloseable qac = enter(contents)) {
                 return wrapped.call();
             }
         }

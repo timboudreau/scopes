@@ -33,12 +33,11 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.google.inject.Key;
 import com.google.inject.Provider;
-import com.google.inject.Scope;
 import com.google.inject.Stage;
 import com.google.inject.util.Providers;
-import com.mastfrog.giulius.scope.ReentrantScope2.ScopeRunner2;
 import com.mastfrog.util.Invokable;
-import com.mastfrog.util.thread.QuietAutoCloseable;
+import static com.mastfrog.util.collections.CollectionUtils.setOf;
+import com.mastfrog.util.thread.NonThrowingAutoCloseable;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -92,120 +91,189 @@ public class ReentrantScope2Test {
     public void testMultipleReentry() {
         ReentrantScope2 scope = dependencies.getInstance(ReentrantScope2.class);
         assertNull(scope.lookup(String.class, false));
-        try (QuietAutoCloseable c = scope.enter("Hello")) {
+        try (NonThrowingAutoCloseable c = scope.enter("Hello")) {
             assertEquals("Hello", scope.lookup(String.class, false));
-            try (QuietAutoCloseable c1 = scope.enter("World")) {
+            try (NonThrowingAutoCloseable c1 = scope.enter("World")) {
                 assertEquals("World", scope.lookup(String.class, false));
             }
         }
     }
 
     @Test
-    public void testScopeRunner2() throws Exception {
-        ScopesModule module = new ScopesModule();
-        Injector inj = Guice.createInjector(module);
-
-        // We will inject this StringBuilder into an instance of C below
-        StringBuilder constant = new StringBuilder("hello");
-
-        // ScopeRunner2 wraps the Injector and lets us instantiate C and get it
-        // injected with objects only available in the scope
-        ScopeRunner2 r = inj.getInstance(ScopeRunner2.class);
-        ReentrantScope2 scope = r.scope();
-
-        try (AutoCloseable cl = scope.enter(constant)) {
-            assertTrue(scope.inScope());
-            StringBuilder sb = r.call(C.class);
-            assertNotNull(sb);
-            assertSame(constant, sb);
-            assertEquals("hello", sb.toString());
-        }
-
-        assertFalse(scope.inScope());
-        assertSame(scope, r.scope());
-        try {
-            r.call(C.class);
-            fail("ISE should have been thrown");
-        } catch (IllegalStateException ex) {
+    public void testMultipleReentry2() {
+        Injector deps = Guice.createInjector(new ScopesModule3());
+        ReentrantScope3 scope = deps.getInstance(ReentrantScope3.class);
+        Provider<String> prov = deps.getProvider(String.class);
+        Provider<CharSequence> seq = deps.getProvider(CharSequence.class);
+        try (NonThrowingAutoCloseable c = scope.enter("Hello")) {
+            assertEquals("Hello", prov.get());
+            assertEquals("Hello", seq.get());
+            try (NonThrowingAutoCloseable c1 = scope.enter("World")) {
+                assertEquals("World", prov.get());
+                assertEquals("World", seq.get());
+            }
         }
     }
-    @Test
-    public void testBenchmark2() {
-        Injector deps2 = Guice.createInjector(Stage.PRODUCTION, new MicrobenchmarkModule2());
-        ReentrantScope2 newScope = deps2.getInstance(ReentrantScope2.class);
-        benchmark(newScope);
-        benchmark(newScope);
-        benchmark(newScope);
-        benchmark(newScope);
-        benchmark(newScope);
-    }
 
-    @Test
-    public void testBenchmark() {
+
+//    @Test
+//    public void testScopeRunner2() throws Exception {
+//        ScopesModule module = new ScopesModule();
+//        Injector inj = Guice.createInjector(module);
+//
+//        // We will inject this StringBuilder into an instance of C below
+//        StringBuilder constant = new StringBuilder("hello");
+//
+//        // ScopeRunner2 wraps the Injector and lets us instantiate C and get it
+//        // injected with objects only available in the scope
+//        ScopeRunner r = inj.getInstance(ScopeRunner.class);
+//        ReentrantScope2 scope = r.scope();
+//
+//        try (AutoCloseable cl = scope.enter(constant)) {
+//            assertTrue(scope.inScope());
+//            StringBuilder sb = r.call(C.class);
+//            assertNotNull(sb);
+//            assertSame(constant, sb);
+//            assertEquals("hello", sb.toString());
+//        }
+//
+//        assertFalse(scope.inScope());
+//        assertSame(scope, r.scope());
+//        try {
+//            r.call(C.class);
+//            fail("ISE should have been thrown");
+//        } catch (IllegalStateException ex) {
+//        }
+//    }
+
+    
+  @Test
+    public void benchmark() {
+        int itersA = 0, itersB = 0, itersC = 0;
         Injector deps = Guice.createInjector(Stage.PRODUCTION, new MicrobenchmarkModule());
-        ReentrantScope oldScope = deps.getInstance(ReentrantScope.class);
-        benchmark(oldScope);
-        benchmark(oldScope);
-        benchmark(oldScope);
-        benchmark(oldScope);
-        benchmark(oldScope);
+        AbstractScope scope = deps.getInstance(ReentrantScope.class);
+        benchmark(scope);
+        benchmark(scope);
+        itersA += benchmark(scope);
+        itersA += benchmark(scope);
+        itersA += benchmark(scope);
+        deps = Guice.createInjector(Stage.PRODUCTION, new MicrobenchmarkModule2());
+         scope = deps.getInstance(ReentrantScope2.class);
+        benchmark(scope);
+        benchmark(scope);
+        itersB += benchmark(scope);
+        itersB +=benchmark(scope);
+        itersB +=benchmark(scope);
+        deps = Guice.createInjector(Stage.PRODUCTION, new MicrobenchmarkModule3());
+        scope = deps.getInstance(ReentrantScope3.class);
+        benchmark(scope);
+        benchmark(scope);
+        itersC +=benchmark(scope);
+        itersC +=benchmark(scope);
+        itersC +=benchmark(scope);
+
+        System.out.println("\n ReentrantScope1: " + (itersA / 3));
+        System.out.println("\n ReentrantScope2: " + (itersB / 3));
+        System.out.println("\n ReentrantScope3: " + (itersC / 3));
     }
+
 
     private static final Object[] contents1 = new Object[]{"one", new StringBuilder("stuff"), 23F};
     private static final Object[] contents2 = new Object[]{"two", 15D, new BigDecimal("23.0001")};
     private static final Object[] contents3 = new Object[]{"three", new HashSet<>(Arrays.asList("foo", "bar")), true};
-    private static final Object[] contents4 = new Object[]{new StringBuilder("more"), 24F, new Date()};
+    private static final Object[] contents4 = new Object[]{"four", new StringBuilder("more"), 24F, new Date()};
+    private static final Object[] contents5 = new Object[]{"five", setOf("foo", "bar"), 14F, new Date(15)};
+    private static final Object[] contents6 = new Object[]{"five", "six", "seven", "eight"};
 
     @SuppressWarnings("unchecked")
-    public void benchmark(Scope scope) {
+    public int benchmark(AbstractScope scope) {
+        Provider<String> sp;
+        Provider<CharSequence> seq;
         Provider<?>[] ps = new Provider<?>[]{
-            scope.scope((Key) Key.get(String.class), Providers.of(null)),
+            sp = scope.scope((Key) Key.get(String.class), Providers.of(null)),
             scope.scope((Key) Key.get(StringBuilder.class), Providers.of(null)),
             scope.scope((Key) Key.get(Float.class), Providers.of(null)),
             scope.scope((Key) Key.get(Double.class), Providers.of(null)),
             scope.scope((Key) Key.get(BigDecimal.class), Providers.of(null)),
             scope.scope((Key) Key.get(Set.class), Providers.of(null)),
             scope.scope((Key) Key.get(Boolean.class), Providers.of(null)),
-            scope.scope((Key) Key.get(Date.class), Providers.of(null)),};
-        long start = System.currentTimeMillis();
+            scope.scope((Key) Key.get(Date.class), Providers.of(null)),
+            seq = scope.scope((Key) Key.get(CharSequence.class), Providers.of(null)),
+        };
+//        long start = System.currentTimeMillis();
+        long end = System.currentTimeMillis() + 5000;
+        int iterations = 0;
         Object o;
-        for (int i = 0; i < 3600; i++) {
-            try (QuietAutoCloseable cl = scope instanceof ReentrantScope2 ? ((ReentrantScope2) scope).enter(contents1) : ((ReentrantScope) scope).enter(contents1)) {
+        String nm = scope.getClass().getSimpleName();
+        for (;; iterations++) {
+            assertFalse(scope.inScope());
+            try (NonThrowingAutoCloseable cl = scope.enter(contents1)) {
+                assertTrue(scope.inScope());
                 for (Provider<?> p : ps) {
                     o = p.get();
                 }
-                try (QuietAutoCloseable cl1 = scope instanceof ReentrantScope2 ? ((ReentrantScope2) scope).enter(contents2) : ((ReentrantScope) scope).enter(contents2)) {
+                assertEquals(nm, "one", sp.get());
+                try (NonThrowingAutoCloseable cl1 = scope.enter(contents2)) {
                     for (Provider<?> p : ps) {
                         o = p.get();
                     }
-                    try (QuietAutoCloseable cl2 = scope instanceof ReentrantScope2 ? ((ReentrantScope2) scope).enter(contents3) : ((ReentrantScope) scope).enter(contents3)) {
+                    assertEquals(nm, "two", sp.get());
+                    try (NonThrowingAutoCloseable cl2 = scope.enter(contents3)) {
                         for (Provider<?> p : ps) {
                             o = p.get();
                         }
-                        try (QuietAutoCloseable cl3 = scope instanceof ReentrantScope2 ? ((ReentrantScope2) scope).enter(contents4) : ((ReentrantScope) scope).enter(contents4)) {
+                        assertEquals(nm, "three", sp.get());
+                        try (NonThrowingAutoCloseable cl3 = scope.enter(contents4)) {
                             for (Provider<?> p : ps) {
                                 o = p.get();
                             }
+                            assertEquals(nm, "four", sp.get());
+                            try (NonThrowingAutoCloseable cl5 = scope.enter(contents5)) {
+                                for (Provider<?> p : ps) {
+                                    o = p.get();
+                                }
+                                assertEquals(nm, "five", sp.get());
+                                try (NonThrowingAutoCloseable cl6 = scope.enter(contents6)) {
+                                    for (Provider<?> p : ps) {
+                                        o = p.get();
+                                    }
+                                    assertEquals(nm, "eight", sp.get());
+                                    assertNotNull(nm, seq.get());
+//                                    assertEquals(nm, "eight", seq.get());
+                                }
+                            }
+                            assertEquals(nm, "four", sp.get());
                         }
+                        assertEquals(nm, "three", sp.get());
                     }
+                    assertEquals(nm, "two", sp.get());
                 }
+                assertEquals(nm, "one", sp.get());
+                assertTrue(scope.inScope());
+//                for (Object ob : contents1) {
+//                    if (!(scope instanceof ReentrantScope2)) {
+//                        assertEquals("Looking for " + ob + " in " + scope.getClass().getSimpleName(), ob, scope.get(ob.getClass()));
+//                    }
+//                }
+            }
+            if (System.currentTimeMillis() >= end) {
+                break;
             }
         }
-        long end = System.currentTimeMillis();
-        System.out.println("Benchmark " + scope.getClass().getSimpleName() + ": " + (end - start));
+        System.out.println("Benchmark " + scope.getClass().getSimpleName() + ": " + iterations);
+        return iterations;
     }
 
+    static Class<?>[] types = new Class<?>[]{String.class, StringBuilder.class, Float.class, Double.class, BigDecimal.class, Set.class, Boolean.class, Date.class, CharSequence.class};
     static class MicrobenchmarkModule extends AbstractModule {
 
         ReentrantScope scope = new ReentrantScope();
 
         @Override
         protected void configure() {
-            Class<?>[] types = new Class<?>[]{String.class, StringBuilder.class, Float.class, Double.class, BigDecimal.class, Set.class, Boolean.class, Date.class};
             scope.bindTypes(binder(), types);
             bind(ReentrantScope.class).toInstance(scope);
         }
-
     }
 
     static class MicrobenchmarkModule2 extends AbstractModule {
@@ -214,12 +282,22 @@ public class ReentrantScope2Test {
 
         @Override
         protected void configure() {
-            Class<?>[] types = new Class<?>[]{String.class, StringBuilder.class, Float.class, Double.class, BigDecimal.class, Set.class, Boolean.class, Date.class};
             scope2.bindTypes(binder(), types);
             bind(ReentrantScope2.class).toInstance(scope2);
         }
-
     }
+
+    static class MicrobenchmarkModule3 extends AbstractModule {
+
+        private ReentrantScope3 scope3 = new ReentrantScope3();
+
+        @Override
+        protected void configure() {
+            scope3.bindTypes(binder(), types);
+            bind(ReentrantScope3.class).toInstance(scope3);
+        }
+    }
+
 
     static class C implements Callable<StringBuilder> {
 
@@ -242,7 +320,18 @@ public class ReentrantScope2Test {
         protected void configure() {
             ReentrantScope2 scope = new ReentrantScope2();
             bind(ReentrantScope2.class).toInstance(scope);
-            scope.bind(binder(), String.class, StringBuilder.class, Integer.class);
+            scope.bind(binder(), String.class, StringBuilder.class, Integer.class, CharSequence.class);
         }
     }
+
+    private static final class ScopesModule3 extends AbstractModule {
+
+        @Override
+        protected void configure() {
+            ReentrantScope3 scope3 = new ReentrantScope3();
+            bind(ReentrantScope3.class).toInstance(scope3);
+            scope3.bindAllowingNulls(binder(), String.class, StringBuilder.class, Integer.class, CharSequence.class);
+        }
+    }
+
 }
