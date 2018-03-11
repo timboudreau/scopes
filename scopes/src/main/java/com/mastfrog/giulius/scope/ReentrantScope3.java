@@ -179,6 +179,7 @@ public class ReentrantScope3 extends AbstractScope {
             return list.isEmpty() ? null : list.peek();
         }
 
+        @SuppressWarnings("unchecked")
         void unsafeEnter(Object o) {
             objsForThread.get().push((T) o);
         }
@@ -198,6 +199,7 @@ public class ReentrantScope3 extends AbstractScope {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         public T get() {
             LinkedList<T> l = objsForThread.get();
             if (l.isEmpty()) {

@@ -149,6 +149,10 @@ public class ReentrantScope2Test {
     
   @Test
     public void benchmark() {
+        if (true) {
+            // These are slow and just for comparing performance
+//            return;
+        }
         int itersA = 0, itersB = 0, itersC = 0;
         Injector deps = Guice.createInjector(Stage.PRODUCTION, new MicrobenchmarkModule());
         AbstractScope scope = deps.getInstance(ReentrantScope.class);

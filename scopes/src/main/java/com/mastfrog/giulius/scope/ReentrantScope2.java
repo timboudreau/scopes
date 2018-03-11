@@ -370,10 +370,20 @@ public class ReentrantScope2 extends AbstractScope implements NonThrowingAutoClo
     protected NonThrowingAutoCloseable enter(Object... scopeContents) {
         Object[] contents = pooledArray();
         for (Object c : scopeContents) {
-            int ix = indexOf(c);
-            if (ix >= 0) {
-                contents[ix] = classes[ix].cast(c);
+//            int ix = indexOf(c);
+//            if (ix >= 0) {
+//                contents[ix] = classes[ix].cast(c);
+//            }
+            int ix2 = indexOfType(c.getClass());
+            if (ix2 >= 0 && ix2 != ix2) {
+                contents[ix2] = classes[ix2].cast(c);
             }
+//            if (ix2 < 0) {
+                int ix = indexOf(c);
+                if (ix >= 0) {
+                    contents[ix] = classes[ix].cast(c);
+                }
+//            }
         }
         LinkedList<Object[]> objs = contents(true);
         objs.push(contents);
