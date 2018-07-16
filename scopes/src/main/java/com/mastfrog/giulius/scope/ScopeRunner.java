@@ -25,7 +25,7 @@ package com.mastfrog.giulius.scope;
 
 import com.google.inject.Inject;
 import com.google.inject.Injector;
-import com.mastfrog.util.Invokable;
+import com.mastfrog.util.function.Invokable;
 import java.util.concurrent.Callable;
 
 /**

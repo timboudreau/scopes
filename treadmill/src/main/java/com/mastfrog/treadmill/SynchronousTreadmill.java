@@ -26,14 +26,13 @@ package com.mastfrog.treadmill;
 import com.mastfrog.giulius.scope.ReentrantScope;
 import com.mastfrog.treadmill.Treadmill.Deferral;
 import com.mastfrog.treadmill.Treadmill.Deferral.Resumer;
-import com.mastfrog.util.Exceptions;
-import com.mastfrog.util.thread.QuietAutoCloseable;
+import com.mastfrog.util.preconditions.Exceptions;
 import java.util.Iterator;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import com.mastfrog.util.thread.QuietAutoCloseable;
 
 /**
  * Synchronous version of Treadmill

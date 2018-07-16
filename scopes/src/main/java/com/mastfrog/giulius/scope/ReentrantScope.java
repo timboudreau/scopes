@@ -24,11 +24,11 @@
 package com.mastfrog.giulius.scope;
 
 import com.google.inject.Provider;
-import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
+import com.mastfrog.util.thread.QuietAutoCloseable;
 
 /**
  * Base class for scopes which can be reentered multiple times and allow the
@@ -52,9 +52,10 @@ public class ReentrantScope extends AbstractScope {
     }
 
     /**
-     * Create a scope with a provider for information to use in error messages when something
-     * unavailable is requested for injection.  The Provider interface is used here simply to
-     * decouple the actual code doing this from the scopes module.
+     * Create a scope with a provider for information to use in error messages
+     * when something unavailable is requested for injection. The Provider
+     * interface is used here simply to decouple the actual code doing this from
+     * the scopes module.
      *
      * @see com.mastfrog.giulius.InjectionInfo
      * @param injectionInfoProvider
@@ -73,13 +74,22 @@ public class ReentrantScope extends AbstractScope {
         return scopeContents;
     }
 
-    private final QuietAutoCloseable qac = new QuietAutoCloseable() {
+    private final QuietAutoCloseable qac = new NTAC(this);
+
+    private static final class NTAC implements QuietAutoCloseable {
+
+        private final AbstractScope scope;
+
+        public NTAC(AbstractScope scope) {
+            this.scope = scope;
+        }
 
         @Override
         public void close() {
-            exit();
+            scope.exit();
         }
-    };
+
+    }
 
     public QuietAutoCloseable enter(Object... o) {
         List<Object[]> context = lists.get();

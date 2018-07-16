@@ -30,7 +30,7 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.ProvisionException;
-import com.mastfrog.util.Invokable;
+import com.mastfrog.util.function.Invokable;
 import java.io.IOException;
 import org.junit.After;
 import org.junit.Before;

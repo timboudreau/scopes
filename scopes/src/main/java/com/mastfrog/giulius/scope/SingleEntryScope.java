@@ -24,11 +24,11 @@
 package com.mastfrog.giulius.scope;
 
 import com.google.inject.Scope;
-import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
+import com.mastfrog.util.thread.QuietAutoCloseable;
 
 /**
  * Base class for ThreadLocal-based scopes with ad-hoc contents

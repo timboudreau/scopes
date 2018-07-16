@@ -29,9 +29,8 @@ import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.Scope;
 import com.google.inject.util.Providers;
-import com.mastfrog.util.Invokable;
+import com.mastfrog.util.function.Invokable;
 import com.mastfrog.util.strings.AlignedText;
-import com.mastfrog.util.thread.NonThrowingAutoCloseable;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.TypeVariable;
 import java.util.ArrayList;
@@ -46,6 +45,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
+import com.mastfrog.util.thread.QuietAutoCloseable;
 
 /**
  * Base class for custom scope implementations. The basic model here is that you
@@ -198,7 +198,7 @@ public abstract class AbstractScope implements Scope {
      * @return An instance of AutoClosable which can be used with JDK-7's
      * try-with-resources to ensure the scope is exited.
      */
-    protected abstract NonThrowingAutoCloseable enter(Object... scopeContents);
+    protected abstract QuietAutoCloseable enter(Object... scopeContents);
 
     /**
      * Exit the scope. Must be called symmetrically with enter.
@@ -303,7 +303,12 @@ public abstract class AbstractScope implements Scope {
      * @throws Exception
      */
     public <T> T run(Callable<T> callable, Object... args) throws Exception {
-        return run(new CallableWrapper<T>(), callable, args);
+        enter(args);
+        try {
+            return callable.call();
+        } finally {
+            exit();
+        }
     }
 
     /*
@@ -311,23 +316,11 @@ public abstract class AbstractScope implements Scope {
      * available for injection
      */
     public void run(Runnable runnable, Object... args) {
-        run(new RunnableWrapper(), runnable, args);
-    }
-
-    static class CallableWrapper<T> extends Invokable<Callable<T>, T, Exception> {
-
-        @Override
-        public T run(Callable<T> argument) throws Exception {
-            return argument.call();
-        }
-    }
-
-    static class RunnableWrapper extends Invokable<Runnable, Void, RuntimeException> {
-
-        @Override
-        public Void run(Runnable argument) throws RuntimeException {
-            argument.run();
-            return null;
+        enter(args);
+        try {
+            runnable.run();
+        } finally {
+            exit();
         }
     }
 
@@ -407,7 +400,7 @@ public abstract class AbstractScope implements Scope {
         if (i instanceof WrapInvokable && ((WrapInvokable) i).scope == this) {
             return i;
         }
-        return new WrapInvokable<T, R, E>(this, i, arg);
+        return new WrapInvokable<>(this, i, arg);
     }
 
     /**
@@ -443,7 +436,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public T call() throws Exception {
-            try (NonThrowingAutoCloseable qac = enter(contents)) {
+            try (QuietAutoCloseable qac = enter(contents)) {
                 return wrapped.call();
             }
         }
