@@ -25,14 +25,12 @@
  */
 package com.mastfrog.giulius.scope;
 
-import com.mastfrog.giulius.scope.SingleEntryScope;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.ProvisionException;
-import com.mastfrog.util.function.Invokable;
+import com.mastfrog.function.throwing.ThrowingFunction;
 import java.io.IOException;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -76,10 +74,10 @@ public class SingleEntryScopeTest {
 
     @Test
     public void testCall() throws Exception {
-        class I extends Invokable<String, String, Exception> {
+        class I implements ThrowingFunction<String, String> {
 
             @Override
-            public String run(String argument) throws Exception {
+            public String apply(String argument) throws Exception {
                 X x = deps.getInstance(X.class);
                 assertNotNull(x);
                 assertEquals("test", x.toString());

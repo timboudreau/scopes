@@ -13,7 +13,6 @@
     <packaging>pom</packaging>
     <modules>
         <module>scopes</module>
-        <module>treadmill</module>
     </modules>
     <url>https://github.com/timboudreau/scopes</url>
     <scm>

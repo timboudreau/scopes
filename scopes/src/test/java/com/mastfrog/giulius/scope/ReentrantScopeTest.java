@@ -25,14 +25,11 @@
  */
 package com.mastfrog.giulius.scope;
 
-import com.mastfrog.giulius.scope.AbstractScope;
-import com.mastfrog.giulius.scope.ReentrantScope;
-import com.mastfrog.giulius.scope.ScopeRunner;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
-import com.mastfrog.util.function.Invokable;
+import com.mastfrog.function.throwing.ThrowingFunction;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 import org.junit.Before;
@@ -49,16 +46,16 @@ public class ReentrantScopeTest {
     }
 
     @Test
-    public void testInScope() {
+    public void testInScope() throws Exception {
         final int limit = 10;
         StringBuilder constant = new StringBuilder("hello");
         final boolean[] ran = new boolean[1];
         //Recursively enter the scope multiple times, and ensure that the
         //most recent values are the ones which are available
-        class One extends Invokable<Integer, Void, RuntimeException> {
+        class One implements ThrowingFunction<Integer, Void> {
 
             @Override
-            public Void run(Integer argument) throws RuntimeException {
+            public Void apply(Integer argument) throws Exception {
                 ran[0] = true;
                 assertNotNull(dependencies.getInstance(Integer.class));
                 assertEquals(argument, dependencies.getInstance(Integer.class));

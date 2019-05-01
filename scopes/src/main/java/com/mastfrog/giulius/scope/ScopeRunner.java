@@ -25,7 +25,6 @@ package com.mastfrog.giulius.scope;
 
 import com.google.inject.Inject;
 import com.google.inject.Injector;
-import com.mastfrog.util.function.Invokable;
 import java.util.concurrent.Callable;
 
 /**
@@ -61,12 +60,5 @@ public final class ScopeRunner {
             throw new IllegalStateException ("Not in " + scope);
         }
         return injector.getInstance(type).call();
-    }
-    
-    public <T, R, E extends Exception> R invoke (Class<? extends Invokable<T, R, E>> type, T arg) throws E {
-        if (!scope.inScope()) {
-            throw new IllegalStateException ("Not in " + scope);
-        }
-        return injector.getInstance(type).run(arg);
     }
 }

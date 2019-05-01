@@ -29,7 +29,7 @@ import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.Scope;
 import com.google.inject.util.Providers;
-import com.mastfrog.util.function.Invokable;
+import com.mastfrog.function.throwing.ThrowingFunction;
 import com.mastfrog.util.strings.AlignedText;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.TypeVariable;
@@ -283,10 +283,10 @@ public abstract class AbstractScope implements Scope {
      * @return The value returned by the Invokable's run method
      * @throws E
      */
-    public <T, A, E extends Exception> T run(Invokable<A, T, E> invokable, A arg, Object... scopeContents) throws E {
+    public <T, A> T run(ThrowingFunction<A, T> invokable, A arg, Object... scopeContents) throws Exception {
         enter(scopeContents);
         try {
-            return invokable.run(arg);
+            return invokable.apply(arg);
         } finally {
             exit();
         }
@@ -396,7 +396,7 @@ public abstract class AbstractScope implements Scope {
         return new WrapRunnable(runnable, this);
     }
 
-    public <T, R, E extends Exception> Invokable<T, R, E> wrap(Invokable<T, R, E> i, AtomicReference<T> arg) {
+    public <T, R> ThrowingFunction<T, R> wrap(ThrowingFunction<T, R> i, AtomicReference<T> arg) {
         if (i instanceof WrapInvokable && ((WrapInvokable) i).scope == this) {
             return i;
         }
@@ -480,21 +480,21 @@ public abstract class AbstractScope implements Scope {
         }
     }
 
-    static class WrapInvokable<T, R, E extends Exception> extends Invokable<T, R, E> {
+    static class WrapInvokable<T, R> implements ThrowingFunction<T, R> {
 
         private final AbstractScope scope;
-        private final Invokable<T, R, E> invokable;
+        private final ThrowingFunction<T, R> invokable;
         private final Object[] scopeContents;
         private final AtomicReference<T> arg;
 
-        WrapInvokable(AbstractScope scope, Invokable<T, R, E> callable, AtomicReference<T> arg) {
+        WrapInvokable(AbstractScope scope, ThrowingFunction<T, R> callable, AtomicReference<T> arg) {
             this.scope = scope;
             this.invokable = callable;
             scopeContents = scope.contents().toArray();
             this.arg = arg;
         }
 
-        Invokable<T, R, E> unwrap() {
+        ThrowingFunction<T, R> unwrap() {
             return invokable;
         }
 
@@ -503,10 +503,10 @@ public abstract class AbstractScope implements Scope {
         }
 
         @Override
-        public R run(T argument) throws E {
+        public R apply(T argument) throws Exception {
             scope.enter(scopeContents);
             try {
-                return invokable.run(arg.get());
+                return invokable.apply(arg.get());
             } finally {
                 scope.exit();
             }
