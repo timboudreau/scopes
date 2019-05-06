@@ -23,6 +23,10 @@
         <connection>scm:git:https://github.com/timboudreau/scopes.git</connection>
         <developerConnection>git@github.com/timboudreau/scopes.git</developerConnection>
     </scm>
+    <organization>
+        <name>Mastfrog Technologies</name>
+        <url>https://mastfrog.com</url>
+    </organization>
     <licenses>
         <license>
             <name>MIT</name>
