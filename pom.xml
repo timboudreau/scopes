@@ -14,7 +14,10 @@
     <modules>
         <module>scopes</module>
     </modules>
-    <url>https://github.com/timboudreau/scopes</url>
+    <issueManagement>
+        <system>Github</system>
+        <url>https://github.com/timboudreau/scopes/issues</url>
+    </issueManagement>
     <scm>
         <url>https://github.com/timboudreau/scopes</url>
         <connection>scm:git:https://github.com/timboudreau/scopes.git</connection>
