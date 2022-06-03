@@ -21,4 +21,7 @@ open module com.mastfrog.scopes {
     requires com.mastfrog.util.function;
     requires java.logging;
 
+    // Inferred from test-source-scan
+    requires transitive junit;
+
 }
