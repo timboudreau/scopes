@@ -46,6 +46,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
 import com.mastfrog.util.thread.QuietAutoCloseable;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * Base class for custom scope implementations. The basic model here is that you
@@ -391,7 +394,7 @@ public abstract class AbstractScope implements Scope {
             return runnable;
         }
         if (!inScope()) {
-            throw new IllegalThreadStateException("Not in scope " + this);
+            return runnable;
         }
         return new WrapRunnable(runnable, this);
     }
@@ -406,7 +409,8 @@ public abstract class AbstractScope implements Scope {
     /**
      * Wrap a callable to enter this scope before it is run
      *
-     * @param callable A callable
+     * @param <T> the return type
+     * @param wrapped A callable
      * @return A wrapper which delegates to this callable
      */
     public <T> Callable<T> wrap(Callable<T> wrapped) {
@@ -415,6 +419,119 @@ public abstract class AbstractScope implements Scope {
 
     public <T> Callable<T> wrap(Callable<T> callable, Object... contents) {
         return new WrapCallable<>(callable, contents);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> Consumer<T> wrap(Consumer<? super T> consumer) {
+        if (!inScope()) {
+            return (Consumer<T>) consumer;
+        }
+        return new WrappedConsumer<>(consumer);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T, R> BiConsumer<T, R> wrap(BiConsumer<? super T, ? super R> consumer) {
+        if (!inScope()) {
+            return (BiConsumer<T, R>) consumer;
+        }
+        return new WrappedBiConsumer<>(consumer);
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> Supplier<T> wrap(Supplier<? extends T> supplier) {
+        if (!inScope()) {
+            return (Supplier<T>) supplier;
+        }
+        return new WrappedSupplier<>(supplier);
+    }
+
+    private class WrappedSupplier<T> implements Supplier<T> {
+
+        private final Supplier<? extends T> wrapped;
+        private final Object[] contents;
+
+        WrappedSupplier(Supplier<? extends T> wrapped) {
+            this.wrapped = wrapped;
+            this.contents = AbstractScope.this.contents().toArray();
+        }
+
+        @Override
+        public T get() {
+            try ( QuietAutoCloseable qac = enter(contents)) {
+                return wrapped.get();
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "Wrap(" + contents.length + " " + wrapped + ")";
+        }
+    }
+
+    private class WrappedConsumer<T> implements Consumer<T> {
+
+        private final Consumer<? super T> wrapped;
+        private final Object[] contents;
+
+        WrappedConsumer(Consumer<? super T> wrapped) {
+            this.wrapped = wrapped;
+            this.contents = AbstractScope.this.contents().toArray();
+        }
+
+        WrappedConsumer(WrappedConsumer<T> other, Consumer<? super T> next) {
+            this.wrapped = next;
+            this.contents = other.contents;
+        }
+
+        @Override
+        public void accept(T t) {
+            try ( QuietAutoCloseable qac = enter(contents)) {
+                wrapped.accept(t);
+            }
+        }
+
+        @Override
+        public Consumer<T> andThen(Consumer<? super T> after) {
+            return Consumer.super.andThen(new WrappedConsumer<T>(this, after));
+        }
+
+        @Override
+        public String toString() {
+            return "Wrap(" + contents.length + " " + wrapped + ")";
+        }
+    }
+
+    private class WrappedBiConsumer<T, R> implements BiConsumer<T, R> {
+
+        private final BiConsumer<? super T, ? super R> wrapped;
+        private final Object[] contents;
+
+        WrappedBiConsumer(BiConsumer<? super T, ? super R> wrapped) {
+            this.wrapped = wrapped;
+            this.contents = AbstractScope.this.contents().toArray();
+        }
+
+        WrappedBiConsumer(WrappedBiConsumer<T, R> other, BiConsumer<? super T, ? super R> next) {
+            this.wrapped = next;
+            this.contents = other.contents;
+        }
+
+        @Override
+        public void accept(T t, R r) {
+            try ( QuietAutoCloseable qac = enter(contents)) {
+                wrapped.accept(t, r);
+            }
+        }
+
+        @Override
+        public BiConsumer<T, R> andThen(BiConsumer<? super T, ? super R> after) {
+            return BiConsumer.super.andThen(new WrappedBiConsumer<>(this, after));
+        }
+
+        @Override
+        public String toString() {
+            return "Wrap(" + contents.length + " " + wrapped + ")";
+        }
     }
 
     private class WrapCallable<T> implements Callable<T> {
@@ -436,7 +553,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public T call() throws Exception {
-            try (QuietAutoCloseable qac = enter(contents)) {
+            try ( QuietAutoCloseable qac = enter(contents)) {
                 return wrapped.call();
             }
         }
@@ -498,6 +615,7 @@ public abstract class AbstractScope implements Scope {
             return invokable;
         }
 
+        @Override
         public String toString() {
             return invokable.toString();
         }

@@ -29,9 +29,14 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
+import com.google.inject.Provider;
+import com.mastfrog.function.state.Bool;
 import com.mastfrog.function.throwing.ThrowingFunction;
+import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.io.IOException;
 import java.util.concurrent.Callable;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -80,7 +85,7 @@ public class ReentrantScopeTest {
     public void testScopeRunner() throws Exception {
         ScopesModule module = new ScopesModule();
         Injector inj = Guice.createInjector(module);
-        
+
         // We will inject this StringBuilder into an instance of C below
         StringBuilder constant = new StringBuilder("hello");
 
@@ -89,7 +94,7 @@ public class ReentrantScopeTest {
         ScopeRunner r = inj.getInstance(ScopeRunner.class);
         AbstractScope scope = r.scope();
 
-        try (AutoCloseable cl = scope.enter(constant)) {
+        try ( AutoCloseable cl = scope.enter(constant)) {
             assertTrue(scope.inScope());
             StringBuilder sb = r.call(C.class);
             assertNotNull(sb);
@@ -104,6 +109,54 @@ public class ReentrantScopeTest {
             fail("ISE should have been thrown");
         } catch (IllegalStateException ex) {
         }
+    }
+
+    @Test
+    public void testWrappedConsumer() {
+        ReentrantScope re = new ReentrantScope();
+
+        Provider<Integer> ints = re.provider(Integer.class, () -> null);
+        Provider<StringBuilder> sbs = re.provider(StringBuilder.class, () -> null);
+        Provider<String> str = re.provider(String.class, () -> null);
+
+        Bool consumerRan = Bool.create();
+        Bool biConsumerRan = Bool.create();
+
+        Consumer<String> vc = v -> {
+            consumerRan.set(true);
+            assertEquals("Argument not propagated properly: " + v, "foo", v);
+            assertNotNull(ints.get());
+            assertNotNull(sbs.get());
+            assertNotNull(str.get());
+        };
+        BiConsumer<String, String> bc = (a, b) -> {
+            assertEquals("First argument not propagated properly: " + a, "bar", a);
+            assertEquals("Second argument not propagated properly: " + b, "baz", b);
+            biConsumerRan.set(true);
+            assertNotNull(ints.get());
+            assertNotNull(sbs.get());
+            assertNotNull(str.get());
+        };
+
+        assertSame("No need to wrap if not in scope", vc, re.wrap(vc));
+        assertSame("No need to wrap if not in scope", bc, re.wrap(bc));
+
+        Consumer<String> wrappedConsumer;
+        BiConsumer<String, String> wrappedBiConsumer;
+
+        try ( QuietAutoCloseable qac = re.enter(23, new StringBuilder("Moo"), "Hoo")) {
+            assertNotNull(qac);
+            wrappedConsumer = re.wrap(vc);
+            assertNotSame("Wrap returned same", vc, wrappedConsumer);
+            wrappedBiConsumer = re.wrap(bc);
+            assertNotSame("Wrap returned same", wrappedBiConsumer, bc);
+        }
+
+        wrappedConsumer.accept("foo");
+        wrappedBiConsumer.accept("bar", "baz");
+
+        assertTrue("Wrapped Consumer did not run", consumerRan.getAsBoolean());
+        assertTrue("Wrapped BiConsumer did not run", biConsumerRan.getAsBoolean());
     }
 
     static class C implements Callable<StringBuilder> {
