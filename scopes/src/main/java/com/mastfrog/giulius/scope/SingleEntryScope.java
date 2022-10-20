@@ -24,11 +24,11 @@
 package com.mastfrog.giulius.scope;
 
 import com.google.inject.Scope;
+import com.mastfrog.function.misc.QuietAutoClosable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Callable;
-import com.mastfrog.util.thread.QuietAutoCloseable;
 
 /**
  * Base class for ThreadLocal-based scopes with ad-hoc contents
@@ -63,12 +63,12 @@ public class SingleEntryScope extends AbstractScope implements Scope {
         }
     }
 
-    protected QuietAutoCloseable enter(Object... scopeContents) {
+    protected QuietAutoClosable enter(Object... scopeContents) {
         if (values.get() != null) {
             throw new IllegalStateException("Already in scope " + this);
         }
         values.set(scopeContents);
-        return new QuietAutoCloseable() {
+        return new QuietAutoClosable() {
             @Override
             public void close() {
                 exit();

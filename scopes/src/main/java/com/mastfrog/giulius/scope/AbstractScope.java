@@ -29,6 +29,7 @@ import com.google.inject.Key;
 import com.google.inject.Provider;
 import com.google.inject.Scope;
 import com.google.inject.util.Providers;
+import com.mastfrog.function.misc.QuietAutoClosable;
 import com.mastfrog.function.throwing.ThrowingFunction;
 import com.mastfrog.util.strings.AlignedText;
 import java.lang.annotation.Annotation;
@@ -45,7 +46,6 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Logger;
-import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -201,7 +201,7 @@ public abstract class AbstractScope implements Scope {
      * @return An instance of AutoClosable which can be used with JDK-7's
      * try-with-resources to ensure the scope is exited.
      */
-    protected abstract QuietAutoCloseable enter(Object... scopeContents);
+    protected abstract QuietAutoClosable enter(Object... scopeContents);
 
     /**
      * Exit the scope. Must be called symmetrically with enter.
@@ -457,7 +457,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public T get() {
-            try ( QuietAutoCloseable qac = enter(contents)) {
+            try ( QuietAutoClosable qac = enter(contents)) {
                 return wrapped.get();
             }
         }
@@ -485,7 +485,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public void accept(T t) {
-            try ( QuietAutoCloseable qac = enter(contents)) {
+            try ( QuietAutoClosable qac = enter(contents)) {
                 wrapped.accept(t);
             }
         }
@@ -518,7 +518,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public void accept(T t, R r) {
-            try ( QuietAutoCloseable qac = enter(contents)) {
+            try ( QuietAutoClosable qac = enter(contents)) {
                 wrapped.accept(t, r);
             }
         }
@@ -553,7 +553,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public T call() throws Exception {
-            try ( QuietAutoCloseable qac = enter(contents)) {
+            try ( QuietAutoClosable qac = enter(contents)) {
                 return wrapped.call();
             }
         }

@@ -30,9 +30,9 @@ import com.google.inject.Guice;
 import com.google.inject.Inject;
 import com.google.inject.Injector;
 import com.google.inject.Provider;
+import com.mastfrog.function.misc.QuietAutoClosable;
 import com.mastfrog.function.state.Bool;
 import com.mastfrog.function.throwing.ThrowingFunction;
-import com.mastfrog.util.thread.QuietAutoCloseable;
 import java.io.IOException;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
@@ -144,7 +144,7 @@ public class ReentrantScopeTest {
         Consumer<String> wrappedConsumer;
         BiConsumer<String, String> wrappedBiConsumer;
 
-        try ( QuietAutoCloseable qac = re.enter(23, new StringBuilder("Moo"), "Hoo")) {
+        try ( QuietAutoClosable qac = re.enter(23, new StringBuilder("Moo"), "Hoo")) {
             assertNotNull(qac);
             wrappedConsumer = re.wrap(vc);
             assertNotSame("Wrap returned same", vc, wrappedConsumer);

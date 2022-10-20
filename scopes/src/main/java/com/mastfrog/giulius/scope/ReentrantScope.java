@@ -24,11 +24,11 @@
 package com.mastfrog.giulius.scope;
 
 import com.google.inject.Provider;
+import com.mastfrog.function.misc.QuietAutoClosable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
-import com.mastfrog.util.thread.QuietAutoCloseable;
 
 /**
  * Base class for scopes which can be reentered multiple times and allow the
@@ -74,9 +74,9 @@ public class ReentrantScope extends AbstractScope {
         return scopeContents;
     }
 
-    private final QuietAutoCloseable qac = new NTAC(this);
+    private final QuietAutoClosable qac = new NTAC(this);
 
-    private static final class NTAC implements QuietAutoCloseable {
+    private static final class NTAC implements QuietAutoClosable {
 
         private final AbstractScope scope;
 
@@ -91,7 +91,7 @@ public class ReentrantScope extends AbstractScope {
 
     }
 
-    public QuietAutoCloseable enter(Object... o) {
+    public QuietAutoClosable enter(Object... o) {
         List<Object[]> context = lists.get();
         if (context == null) {
             context = new ArrayList<>(20);
