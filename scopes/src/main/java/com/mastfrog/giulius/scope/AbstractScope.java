@@ -457,7 +457,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public T get() {
-            try ( QuietAutoClosable qac = enter(contents)) {
+            try (QuietAutoClosable qac = enter(contents)) {
                 return wrapped.get();
             }
         }
@@ -485,7 +485,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public void accept(T t) {
-            try ( QuietAutoClosable qac = enter(contents)) {
+            try (QuietAutoClosable qac = enter(contents)) {
                 wrapped.accept(t);
             }
         }
@@ -518,7 +518,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public void accept(T t, R r) {
-            try ( QuietAutoClosable qac = enter(contents)) {
+            try (QuietAutoClosable qac = enter(contents)) {
                 wrapped.accept(t, r);
             }
         }
@@ -553,7 +553,7 @@ public abstract class AbstractScope implements Scope {
 
         @Override
         public T call() throws Exception {
-            try ( QuietAutoClosable qac = enter(contents)) {
+            try (QuietAutoClosable qac = enter(contents)) {
                 return wrapped.call();
             }
         }
@@ -561,12 +561,20 @@ public abstract class AbstractScope implements Scope {
 
     protected abstract List<Object> contents();
 
+    static final boolean asserts;
+
+    static {
+        boolean a = false;
+        assert a = true;
+        asserts = a || Boolean.getBoolean("acteur.debug") || Boolean.getBoolean("unit.test");
+    }
+
     static class WrapRunnable implements Runnable {
 
         private final Runnable run;
         private final AbstractScope scope;
         private final Object[] scopeContents;
-        private final RuntimeException t = new RuntimeException(); //XXX deleteme
+        private final RuntimeException t = asserts ? new RuntimeException() : null;
 
         WrapRunnable(Runnable run, AbstractScope scope) {
             this.run = run;
@@ -580,7 +588,9 @@ public abstract class AbstractScope implements Scope {
             try {
                 run.run();
             } catch (RuntimeException e) {
-                t.initCause(e);
+                if (t != null) {
+                    t.initCause(e);
+                }
                 throw t;
             } finally {
                 scope.exit();
